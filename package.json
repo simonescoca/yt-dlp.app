@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "dist:mac": "electron-vite build && electron-builder --mac --arm64",
     "dist:win": "electron-vite build && electron-builder --win --x64",
-    "dist:dir": "electron-vite build && electron-builder --dir"
+    "dist:dir": "electron-vite build && electron-builder --dir",
+    "test:integration": "vitest run -c vitest.integration.config.ts"
   },
   "dependencies": {
     "extract-zip": "^2.0.1"

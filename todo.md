@@ -70,7 +70,7 @@ non supportati.
   - *Test:* typecheck, build, avvio dell'app in Xvfb con screenshot
 
 ### Fase 2 — Motore
-- [ ] **T2** Gestore componenti: download con progresso, verifica SHA-256, estrazione zip/tar.xz, versioni, controllo aggiornamenti (yt-dlp nightly, Deno, ffmpeg); firma ad-hoc/rimozione quarantena su macOS
+- [x] **T2** Gestore componenti: download con progresso, verifica SHA-256, estrazione zip/tar.xz, versioni, controllo aggiornamenti (yt-dlp nightly, Deno, ffmpeg); firma ad-hoc/rimozione quarantena su macOS
   - *Test:* unit (parsing versioni/checksum, URL per piattaforma) + installazione reale dei componenti Linux nel container
 - [ ] **T3** Wrapper yt-dlp: costruzione argomenti (video/audio, contenitori, compatibilità, metadati), analisi `-J`, parser di progresso, esecuzione annullabile, classificazione errori
   - *Test:* unit sul builder e sul parser + download reali (fixture locali mp4/HLS/DASH generate con ffmpeg, siti reali se raggiungibili)
@@ -122,3 +122,16 @@ non supportati.
 - **Scivolone 5:** electron-vite di default non minifica il renderer (bundle da 641 kB). Attivato `minify` → 222 kB.
 - In container Electron gira come root e richiede `--no-sandbox`: aggiunto solo nei test, mai nell'app.
 - *Test:* `npm run typecheck` ✅ · `npm run build` ✅ · E2E smoke (avvio in Xvfb + screenshot) ✅
+
+### 2026-09-30 — T2 · Gestore componenti ✅
+- Scritti `src/main/engine/sources.ts` (fonti per piattaforma, funzioni pure), `http.ts` (rete Electron/Node, download in streaming con SHA-256), `archive.ts` (zip / tar.xz) e `components.ts` (`ComponentManager`).
+- Ogni versione viene installata nella propria cartella (`bin/<componente>/<revisione>/`), così un aggiornamento non tocca i file di un processo yt-dlp in esecuzione. Le cartelle vecchie vengono eliminate dopo l'installazione o al successivo avvio. Il manifest viene scritto in modo atomico.
+- Se il controllo degli aggiornamenti fallisce (es. offline) ma c'è già una versione installata, l'app continua a funzionare e mostra l'errore solo come informazione.
+- Su macOS: rimozione della quarantena e, se il binario viene bloccato, firma ad-hoc (`codesign -s -`) e nuovo tentativo.
+- **Scivolone 6 (bug trovato dai test):** installando i 3 componenti in parallelo, le scritture del manifest usavano lo stesso file temporaneo e andavano in conflitto (`ENOENT` su `rename`). **Soluzione:** scritture serializzate tramite una catena di promise.
+- **Scivolone 7:** dopo le installazioni restava una cartella `.tmp` vuota. **Soluzione:** `rmdir` a fine installazione (riesce solo quando non ci sono altre installazioni in corso).
+- **Scivolone 8 (solo ambiente di sviluppo):** il Chromium di Electron nel container rifiutava i certificati del proxy HTTPS (`ERR_CERT_AUTHORITY_INVALID`), perché non legge la CA dalle variabili d'ambiente. **Soluzione:** CA aggiunta allo store NSS dell'utente (`~/.pki/nssdb`), senza disattivare la verifica TLS e senza toccare il codice dell'app.
+- **Scoperta:** `net.fetch` di Electron con `redirect: 'manual'` non restituisce il 302 ma va in errore ("Redirect was cancelled"). **Soluzione:** per leggere il redirect si usa `net.request` con l'evento `redirect`.
+- *Test:* 10 test unitari sulle fonti + 5 sul `ComponentManager`, eseguiti con un server finto e archivi zip/tar.xz veri (installazione, nessun download superfluo al riavvio, aggiornamento a una nuova nightly con rimozione della vecchia, `maxAge`, checksum errato, modalità offline) ✅.
+- *Test di integrazione reale* (`npm run test:integration`): installati yt-dlp nightly 2026.09.27.232945, Deno v2.9.7 e ffmpeg N-127043 in 17 s. yt-dlp in versione onedir si avvia in 0,48 s ✅.
+- ⚠️ *Da verificare:* i percorsi macOS e Windows non si possono provare nel container Linux. Verranno verificati con GitHub Actions (runner `macos-14` arm64 e `windows-latest`) in T16.
