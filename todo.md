@@ -66,7 +66,7 @@ non supportati.
 - [x] **T0.3** Stesura del todo.md (questo file)
 
 ### Fase 1 — Fondamenta
-- [ ] **T1** Scaffolding del progetto: Electron + electron-vite + React + TS, struttura cartelle (`src/main`, `src/preload`, `src/renderer`, `src/shared`), script npm, Vitest, TypeScript strict
+- [x] **T1** Scaffolding del progetto: Electron + electron-vite + React + TS, struttura cartelle (`src/main`, `src/preload`, `src/renderer`, `src/shared`), script npm, Vitest, TypeScript strict
   - *Test:* typecheck, build, avvio dell'app in Xvfb con screenshot
 
 ### Fase 2 — Motore
@@ -113,3 +113,12 @@ non supportati.
 - Scoperte le build **onedir** di yt-dlp (`yt-dlp_macos.zip`, `yt-dlp_win.zip`): si avviano più velocemente della versione onefile, che a ogni avvio si scompatta in una cartella temporanea. Si usano quelle.
 - Verificate le fonti di ffmpeg: `ffmpeg.martin-riedl.de` (macOS arm64, 9.0.2, il redirect contiene la versione) e `yt-dlp/FFmpeg-Builds` (Windows/Linux). Deno: `dl.deno.land` (v2.9.7).
 - Domande all'utente in 3 round (12 decisioni, vedi §1). Scritto questo todo.md.
+
+### 2026-09-30 — T1 · Scaffolding ✅
+- Stack installato: Electron 44.5.1 (Chromium 152, Node 24), electron-vite 5, Vite 7.3, React 19.3, TypeScript 6.0, Vitest 5, Playwright 1.63, electron-builder 26.
+- **Scivolone 2 (compatibilità delle versioni):** le versioni più recenti in assoluto non sono compatibili tra loro. electron-vite 5 supporta Vite fino alla 7, mentre Vite 8 e plugin-react 6 escono dal suo intervallo. TypeScript 7 (il port nativo in Go) è troppo nuovo per la toolchain. **Soluzione:** Vite 7 + plugin-react 5.2 + TypeScript 6.
+- **Scivolone 3:** TypeScript 6 segnala come errore l'opzione `baseUrl`, deprecata. **Soluzione:** rimossa; i `paths` ora sono relativi al tsconfig.
+- **Scivolone 4:** il primo avvio del test smoke è fallito, perché la finestra non era pronta entro i 5 s di timeout di Playwright (primo avvio "a freddo" di Electron/Chromium in Xvfb). I 4 avvii successivi sono passati in circa 1 s. **Soluzione:** timeout di `expect` portato a 20 s.
+- **Scivolone 5:** electron-vite di default non minifica il renderer (bundle da 641 kB). Attivato `minify` → 222 kB.
+- In container Electron gira come root e richiede `--no-sandbox`: aggiunto solo nei test, mai nell'app.
+- *Test:* `npm run typecheck` ✅ · `npm run build` ✅ · E2E smoke (avvio in Xvfb + screenshot) ✅
