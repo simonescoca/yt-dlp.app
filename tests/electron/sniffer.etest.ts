@@ -34,10 +34,11 @@ const sniff = (path: string, extra: Partial<Parameters<typeof sniffPage>[0]> = {
 before(async () => {
   ensureMedia(join(paths.ffmpegDir, exe('ffmpeg')))
   b = await startFixtureServer([PAGES, MEDIA_DIR, HLSJS], undefined, 'localhost')
+  // Pages that embed a cross-origin iframe get the second server's origin.
   a = await startFixtureServer([PAGES, MEDIA_DIR, HLSJS], (req, res) => {
-    if (req.url !== '/iframe.html') return false
+    if (req.url !== '/iframe.html' && req.url !== '/teaser-click.html') return false
     res.writeHead(200, { 'Content-Type': 'text/html' })
-    res.end(readFileSync(join(PAGES, 'iframe.html'), 'utf8').replace('__OTHER_ORIGIN__', b.origin))
+    res.end(readFileSync(join(PAGES, req.url.slice(1)), 'utf8').replace('__OTHER_ORIGIN__', b.origin))
     return true
   })
   ses = electronSession.fromPartition(`sniff-test-${Date.now()}`)
@@ -73,7 +74,8 @@ test('hls.js page (MSE, blob: src): finds the master playlist, hides its variant
   assert.equal(r.best.url, `${a.origin}/hls/master.m3u8`)
   assert.equal(r.best.kind, 'hls')
   assert.equal(r.best.height, 720)
-  assert.ok(Math.abs((r.best.duration ?? 0) - 8) < 0.5)
+  assert.ok(Math.abs((r.best.duration ?? 0) - 32) < 0.5)
+  assert.equal(r.doubtful, false)
   assert.ok(!r.candidates.some((c) => c.url.endsWith('/low.m3u8') || c.url.endsWith('/high.m3u8')), 'variants not merged')
 })
 
@@ -96,6 +98,26 @@ test('player that only starts on a trusted click', async () => {
   assert.ok(r.best, 'click did not start the player')
   assert.equal(r.best.url, `${a.origin}/long.mp4?clicked=1`)
   assert.ok(Math.abs((r.best.duration ?? 0) - 45) < 1)
+})
+
+test('a 2 s teaser plays by itself: the scan keeps going and clicks the real player (cross-origin iframe)', async () => {
+  const r = await sniff('/teaser-click.html')
+  const teaser = r.candidates.find((c) => c.url === `${a.origin}/teaser.mp4`)
+  assert.ok(teaser, `teaser not seen: ${JSON.stringify(r.candidates.map((c) => c.url))}`)
+  assert.ok(Math.abs((teaser.duration ?? 0) - 2) < 0.5)
+  assert.ok(r.best, 'no best candidate')
+  assert.equal(r.best.url, `${b.origin}/long.mp4?clicked=1`, 'the click on the real player never happened')
+  assert.ok(Math.abs((r.best.duration ?? 0) - 45) < 1)
+  assert.equal(r.doubtful, false)
+  assert.equal(r.ambiguous, false)
+})
+
+test('only a 2 s teaser on the page: chosen as best but doubtful (the app asks)', async () => {
+  const started = Date.now()
+  const r = await sniff('/teaser-only.html')
+  assert.equal(r.best?.url, `${a.origin}/teaser.mp4`)
+  assert.equal(r.doubtful, true)
+  assert.ok(Date.now() - started < 26_000, `took ${Date.now() - started} ms`)
 })
 
 test('two different long videos: ambiguous, both listed', async () => {

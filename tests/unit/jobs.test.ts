@@ -65,6 +65,7 @@ const sniffResult = (cands: StreamCandidate[], o: Partial<SniffResult> = {}): Sn
   candidates: cands,
   best: cands[0] ?? null,
   ambiguous: false,
+  doubtful: false,
   drmDetected: false,
   ...o
 })
@@ -219,6 +220,75 @@ describe('JobManager', () => {
     const done = await settled(job.id)
     expect(done.status).toBe('completed')
     expect(downloads[0]!.url).toBe('https://cdn/b.mp4')
+  })
+
+  it('only short clips found: asks instead of downloading the clip', async () => {
+    const teaser = candidate('https://cdn/intro.mp4', { kind: 'progressive', duration: 2, size: 800_000 })
+    const { m, downloads, settled } = setup({
+      analyze: async () => {
+        throw new AnalyzeError({ code: 'unsupported', message: 'Unsupported URL' })
+      },
+      sniff: async () => sniffResult([teaser], { doubtful: true })
+    })
+    const waiting = await settled(m.add('https://page/', options).id)
+    expect(waiting.status).toBe('waiting')
+    expect(waiting.pending).toMatchObject({ type: 'stream', sniff: { doubtful: true } })
+    expect(downloads).toHaveLength(0)
+  })
+
+  it('yt-dlp generic/HTML5 extractor in a web page: the scan double-checks and takes the real video', async () => {
+    const sniff = vi.fn(async () =>
+      sniffResult([candidate('https://player.cdn/main.m3u8', { duration: 3900 }), candidate('https://cdn/intro.mp4', { kind: 'progressive', duration: 2 })])
+    )
+    const { m, downloads, settled } = setup({
+      analyze: async (url): Promise<AnalyzeResult> => ({
+        kind: 'video',
+        // The HTML5 extractor usually does not know the duration.
+        media: { ...media('intro'), extractor: 'html5', duration: null, webpageUrl: url },
+        infoJson: '{"id":"intro"}'
+      }),
+      sniff
+    })
+    const done = await settled(m.add('https://site/episodes/one/', options).id)
+    expect(sniff).toHaveBeenCalledOnce()
+    expect(done.status).toBe('completed')
+    expect(done.source).toBe('sniffer')
+    expect(downloads[0]).toMatchObject({ url: 'https://player.cdn/main.m3u8', infoJsonFile: null })
+  })
+
+  it('double-check finds only short clips: asks; finds nothing: keeps the yt-dlp video', async () => {
+    const analyze = async (url: string): Promise<AnalyzeResult> => ({
+      kind: 'video',
+      media: { ...media('clip'), extractor: 'generic', duration: 2, webpageUrl: url },
+      infoJson: '{"id":"clip"}'
+    })
+    const teaser = candidate('https://cdn/intro.mp4', { kind: 'progressive', duration: 2 })
+    const short = setup({ analyze, sniff: async () => sniffResult([teaser], { doubtful: true }) })
+    const waiting = await short.settled(short.m.add('https://site/page/', options).id)
+    expect(waiting.status).toBe('waiting')
+    expect(short.downloads).toHaveLength(0)
+
+    const nothing = setup({ analyze, sniff: async () => sniffResult([]) })
+    const done = await nothing.settled(nothing.m.add('https://site/page/', options).id)
+    expect(done.status).toBe('completed')
+    expect(done.source).toBe('generic')
+    expect(nothing.downloads[0]!.infoJsonFile).toMatch(/info\.json$/)
+  })
+
+  it('a long video from the generic extractor, a direct media link or a real extractor: no scan', async () => {
+    const sniff = vi.fn(async () => sniffResult([]))
+    const found = (extractor: string, duration: number | null) => async (url: string): Promise<AnalyzeResult> => ({
+      kind: 'video',
+      media: { ...media('clip'), extractor, duration, webpageUrl: url },
+      infoJson: '{"id":"clip"}'
+    })
+    const long = setup({ analyze: found('generic', 600), sniff })
+    expect((await long.settled(long.m.add('https://site/page/', options).id)).status).toBe('completed')
+    const direct = setup({ analyze: found('generic', 5), sniff })
+    expect((await direct.settled(direct.m.add('https://cdn/clip.mp4', options).id)).status).toBe('completed')
+    const real = setup({ analyze: found('youtube', 5), sniff })
+    expect((await real.settled(real.m.add('https://www.youtube.com/shorts/x', options).id)).status).toBe('completed')
+    expect(sniff).not.toHaveBeenCalled()
   })
 
   it('reports DRM and missing media', async () => {

@@ -37,6 +37,12 @@ export function urlPath(url: string): string {
   }
 }
 
+/** True for links that point straight at a media file or manifest, not at a web page. */
+export function looksLikeMediaUrl(url: string): boolean {
+  const path = urlPath(url)
+  return PROGRESSIVE_EXT.test(path) || AUDIO_EXT.test(path) || /\.(m3u8?|mpd|f4m)$/.test(path) || /\.ism(l)?\/manifest/.test(path)
+}
+
 /** Total size from Content-Range ("bytes 0-1/12345") or Content-Length. */
 export function totalSize(headers: Record<string, string>): number | null {
   const range = /\/(\d+)\s*$/.exec(headers['content-range'] ?? '')

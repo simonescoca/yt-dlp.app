@@ -1,0 +1,9 @@
+<!doctype html><html><head><title>Episodio con anteprima</title></head>
+<body style="margin:0;font-family:sans-serif">
+<!-- A 2 s teaser that plays by itself, like an intro or a hover preview. -->
+<video id="teaser" autoplay muted loop playsinline src="/teaser.mp4"
+  style="position:absolute;right:16px;top:16px;width:240px;height:135px"></video>
+<!-- The real player lives in a cross-origin iframe and starts only on a trusted click. -->
+<iframe id="player" src="__OTHER_ORIGIN__/click.html" allow="autoplay"
+  style="position:absolute;left:16px;top:16px;width:1000px;height:600px;border:0"></iframe>
+</body></html>

@@ -37,20 +37,34 @@ export function isPlausibleMain(c: StreamCandidate): boolean {
   return true
 }
 
+export interface Ranking {
+  /** Plausible main videos first (by score), then everything else (by score). */
+  sorted: StreamCandidate[]
+  best: StreamCandidate | null
+  /** Two or more distinct plausible videos with close scores: the user should choose. */
+  ambiguous: boolean
+  /** The best candidate is not a plausible main video (only short clips, tiny files, ads or audio). */
+  doubtful: boolean
+}
+
 /**
- * Sorts candidates (best first) and decides whether the choice is ambiguous:
- * two or more plausible main videos whose durations differ (variants of the
- * same video have the same duration) and whose scores are close.
+ * Sorts candidates (best first) and decides whether the choice needs the user:
+ * - ambiguous: two or more plausible main videos whose durations differ (variants
+ *   of the same video have the same duration) and whose scores are close;
+ * - doubtful: nothing plausible was found, e.g. only a 2-second intro or preview
+ *   while the real video starts after a click. A sharp short clip never beats a
+ *   plausible main video, whatever its resolution.
  */
-export function rankCandidates(list: StreamCandidate[]): { sorted: StreamCandidate[]; best: StreamCandidate | null; ambiguous: boolean } {
-  const sorted = [...list].sort((a, b) => b.score - a.score)
-  const best = sorted.find((c) => !c.drm) ?? null
-  const plausible = sorted.filter(isPlausibleMain)
+export function rankCandidates(list: StreamCandidate[]): Ranking {
+  const byScore = [...list].sort((a, b) => b.score - a.score)
+  const plausible = byScore.filter(isPlausibleMain)
+  const sorted = [...plausible, ...byScore.filter((c) => !isPlausibleMain(c))]
+  const best = plausible[0] ?? sorted.find((c) => !c.drm) ?? null
   let ambiguous = false
   if (best && plausible.length >= 2) {
     const [a, b] = plausible as [StreamCandidate, StreamCandidate]
     const sameVideo = a.duration != null && b.duration != null && Math.abs(a.duration - b.duration) <= Math.max(2, a.duration * 0.02)
     ambiguous = !sameVideo && b.score >= a.score * 0.7
   }
-  return { sorted, best, ambiguous }
+  return { sorted, best, ambiguous, doubtful: best != null && !isPlausibleMain(best) }
 }

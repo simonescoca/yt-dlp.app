@@ -55,6 +55,9 @@ const it = {
   'playlist.downloadSelected': 'Scarica {count} video',
   'stream.title': 'Ho trovato più video in questa pagina',
   'stream.subtitle': 'Scegli quello che vuoi scaricare.',
+  'stream.shortTitle': 'Ho trovato solo video brevi',
+  'stream.shortSubtitle':
+    'Di solito sono anteprime o pubblicità: il video vero parte dopo un clic sul player. Apri la pagina e avvialo tu, oppure scegline uno qui.',
   'stream.best': 'Consigliato',
   'stream.ad': 'probabile pubblicità',
   'stream.live': 'diretta',
@@ -199,6 +202,9 @@ const en: Record<MessageKey, string> = {
   'playlist.downloadSelected': 'Download {count} videos',
   'stream.title': 'I found several videos in this page',
   'stream.subtitle': 'Choose the one you want to download.',
+  'stream.shortTitle': 'I only found short videos',
+  'stream.shortSubtitle':
+    'They are usually previews or ads: the real video starts after a click on the player. Open the page and start it yourself, or pick one here.',
   'stream.best': 'Recommended',
   'stream.ad': 'probably an ad',
   'stream.live': 'live',

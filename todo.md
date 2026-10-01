@@ -100,6 +100,7 @@ non supportati.
 
 ### Fase 6 — Conclusione
 - [x] **T18** Revisione finale rispetto ai requisiti, retrospettiva, problemi aperti
+- [x] **T19** Scelta automatica del video: clip brevi (intro, anteprime) e player in iframe cross-origin
 
 ---
 
@@ -173,7 +174,7 @@ non supportati.
   - Modalità interattiva (finestra visibile, lista dal vivo) pronta per l'interfaccia.
   - `probe.ts`: durata e risoluzione dei file progressivi tramite ffprobe.
 - `src/main/browser/cookies.ts`: esportazione dei cookie della sessione in formato Netscape per yt-dlp (anticipata da T7).
-- **Decisione:** la finestra di scansione usa il **rendering offscreen** invece di una finestra nascosta. Molti player non partono se `document.visibilityState` è `hidden`; con l'offscreen la pagina risulta "visibile" senza comparire sullo schermo. Una fixture lo verifica: un player che parte solo se la pagina è visibile.
+- **Decisione (superata in T19):** la finestra di scansione usa il **rendering offscreen** invece di una finestra nascosta. Molti player non partono se `document.visibilityState` è `hidden`; con l'offscreen la pagina risulta "visibile" senza comparire sullo schermo. Una fixture lo verifica: un player che parte solo se la pagina è visibile.
 - **Scoperta:** al sniffer basta Chromium per catturare il manifest anche quando il player usa MSE (`src="blob:…"`): il blob non passa in rete, ma il .m3u8/.mpd sì.
 - **Ottimizzazione:** con DRM rilevato la scansione si ferma subito invece di provare tutti i clic (da 11,5 s a 3 s).
 - *Test:* 15 nuovi test unitari (classificazione, HLS, DASH, ranking, cookies.txt) ✅. 11 test E2E dentro Electron (harness con esbuild, `npm run test:electron`) su 9 pagine fixture ✅:
@@ -340,3 +341,14 @@ non supportati.
 - Il requisito **R8 (Windows + macOS Apple Silicon) è verificato** su macchine reali; la tabella in T18 è aggiornata.
 - **Bilancio della CI:** 3 esecuzioni per arrivare al verde, che hanno trovato **2 bug veri dell'app che avrebbero impedito il primo avvio**: checksum di Deno su Windows e HEAD respinta dal server di ffmpeg per macOS. Senza queste esecuzioni sarebbero arrivati direttamente all'utente. Più 4 problemi dei test o dell'ambiente di CI.
 - **Prossimo passo, per l'utente:** per ottenere gli installer basta un tag (`git tag v0.1.0 && git push --tags`): il workflow *Release* costruisce `.dmg` ed `.exe` e li pubblica in una GitHub Release.
+
+### 2026-10-01 — T19 · Scelta automatica del video: clip brevi e player in iframe 🔧
+- **Segnalazione dell'utente:** su un sito di streaming Grabbit scaricava un video di **2 secondi** invece dell'episodio, che dura più di un'ora.
+- **Causa 1 (scansione):** l'escalation automatica (autoplay → clic sui pulsanti → clic vero sul player) si fermava al primo video non pubblicitario **senza guardarne la durata**. Un'intro o un'anteprima di 2 s chiudeva la ricerca prima del clic che avvia il video vero. **Soluzione:** si continua finché non compare un video plausibile (≥ 30 s, con la durata già nota: si aspettano le sonde in corso). C'è anche un secondo clic vero sul player, perché il primo spesso finisce su un overlay o un popup.
+- **Causa 2 (bug vero, scansione):** il clic vero **non arrivava mai** ai player in **iframe cross-origin**, il caso tipico dei siti che incorporano un host video. Una pagina spia lo ha dimostrato: 0 eventi nell'iframe, sia con `sendInputEvent` sia, con il rendering offscreen, con il protocollo DevTools. **Soluzione:** finestra nascosta normale invece dell'offscreen e clic con `Input.dispatchMouseEvent` del protocollo DevTools, che viene instradato al frame sotto il punto. Ora l'iframe riceve `pointerdown`/`mousedown`/`click` con `isTrusted = true`. La pagina resta "visibile" per la Page Visibility API (finestra creata con `show: false` e `backgroundThrottling: false`): la fixture del player che parte solo se la pagina è visibile passa ancora.
+- **Causa 3 (scelta):** se trovava solo clip brevi, la classifica li sceglieva comunque e il download partiva senza chiedere. **Soluzione:** nuovo flag `doubtful` nel risultato della scansione. In quel caso l'app **non scarica**: mostra "Ho trovato solo video brevi" con il pulsante **Apri la pagina**. Inoltre un video plausibile batte sempre un clip breve, a qualunque risoluzione (prima un'anteprima 4K da 2 s poteva superare un episodio a 360p).
+- **Stesso problema da yt-dlp:** gli estrattori `generic`/`html5` prendono il primo video della pagina, di solito senza durata. Ora quel risultato viene verificato con una scansione: se la scansione trova un video plausibile si scarica quello, se trova solo clip brevi l'app chiede, se non trova nulla resta il video di yt-dlp. I link diretti a file e manifest e gli estrattori veri (YouTube…) non cambiano.
+- **Diagnostica:** a fine scansione `logs/main.log` riporta la tabella dei flussi trovati (tipo, durata, dimensione, risoluzione, punteggio, motivo della scelta), utile per i prossimi casi.
+- **Test:** fixture `teaser-click.html` (clip di 2 s in autoplay + player in un iframe cross-origin che parte solo con un clic vero) e `teaser-only.html`; HLS di prova portato a 32 s, perché sotto i 30 s ora conta come clip. Con lo sniffer di prima il test `teaser-click` fallisce in 3 s ("the click on the real player never happened"), con quello nuovo passa. 7 test unitari e 1 E2E nuovi, 2 nuovi test dello sniffer in Electron. *Test locali:* 85 unitari, 13 sniffer in Electron, 18 E2E ✅.
+- **Costo:** una pagina con soli clip brevi ora richiede circa 20 s di scansione (prima ~5 s), perché Grabbit prova anche i clic prima di arrendersi.
+- ⚠️ **Da verificare dall'utente** sul sito della segnalazione (non aperto durante lo sviluppo). Resta da analizzare il caso "video giusto ma parziale", per cui serve un link di esempio.

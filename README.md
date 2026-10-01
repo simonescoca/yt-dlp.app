@@ -78,6 +78,10 @@ Puoi già incollare dei link: partiranno appena il motore è pronto.
 video, chiudi la finestra e Grabbit lo cattura. Se un video richiede l'accesso, usa
 **Accedi al sito** (oppure *Impostazioni → Accesso ai siti*) e poi **Riprova**.
 
+**Se trova solo video di pochi secondi** (anteprime, intro, pubblicità), Grabbit non li scarica
+da solo: te li mostra e ti propone **Apri la pagina**, perché di solito il video vero parte
+solo dopo un clic sul player.
+
 ## yt-dlp sempre aggiornato
 
 Grabbit usa il canale **nightly** di yt-dlp, quello consigliato dagli stessi sviluppatori di
@@ -114,7 +118,7 @@ ffmpeg ogni settimana. In *Impostazioni → Motore* trovi le versioni installate
 │        │                │                  │                          │
 │        ▼                ▼                  ▼                          │
 │   yt-dlp -J        Sniffer: Chromium     yt-dlp + ffmpeg              │
-│   (+ Deno)         offscreen,            (merge/remux/estrazione      │
+│   (+ Deno)         nascosto,             (merge/remux/estrazione      │
 │                    webRequest su tutti   audio, metadati, copertina)  │
 │                    i frame, DOM, clic                                 │
 │                                                                       │

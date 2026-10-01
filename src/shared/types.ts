@@ -139,6 +139,11 @@ export interface SniffResult {
   best: StreamCandidate | null
   /** True when several distinct plausible videos were found: the user should choose. */
   ambiguous: boolean
+  /**
+   * True when nothing plausible was found, only short clips / tiny files / ads (e.g. a 2-second
+   * intro while the real video starts after a click): never downloaded without asking.
+   */
+  doubtful: boolean
   /** DRM-protected playback was detected (license requests or protected manifests). */
   drmDetected: boolean
 }

@@ -2,7 +2,7 @@ import { BrowserWindow, type Session, type WebContents } from 'electron'
 import type { SniffResult, StreamCandidate } from '@shared/types'
 import { classifyResponse, looksLikeAd, looksLikeDrmLicense, type Classified } from './classify'
 import { parseDash, parseHls } from './manifest'
-import { rankCandidates, scoreCandidate } from './rank'
+import { isPlausibleMain, rankCandidates, scoreCandidate } from './rank'
 
 /** Optional prober for progressive files (ffprobe), used when the page does not tell the duration. */
 export type Prober = (url: string, headers: Record<string, string>) => Promise<{ duration: number | null; width: number | null; height: number | null } | null>
@@ -197,10 +197,27 @@ async function inAllFrames<T>(wc: WebContents, script: string): Promise<T[]> {
   return out
 }
 
-function trustedClick(wc: WebContents, x: number, y: number): void {
-  wc.sendInputEvent({ type: 'mouseMove', x, y })
-  wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
-  wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
+/**
+ * A real ("trusted") click sent through the DevTools protocol. Unlike `sendInputEvent`, it is
+ * routed to the frame under the point, so it also reaches players in cross-origin iframes
+ * (embedded video hosts), which `sendInputEvent` never does.
+ */
+async function trustedClick(wc: WebContents, x: number, y: number): Promise<void> {
+  const dbg = wc.debugger
+  const wasAttached = dbg.isAttached()
+  try {
+    if (!wasAttached) dbg.attach('1.3')
+    await dbg.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y })
+    await dbg.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 })
+    await dbg.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 })
+  } catch {
+    // DevTools protocol unavailable: plain input events (they reach same-origin frames only).
+    wc.sendInputEvent({ type: 'mouseMove', x, y })
+    wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
+    wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
+  } finally {
+    if (!wasAttached && dbg.isAttached()) dbg.detach()
+  }
 }
 
 const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
@@ -214,6 +231,24 @@ const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
 
 function cleanTitle(title: string): string {
   return title.replace(/\s+/g, ' ').trim()
+}
+
+/** One line per candidate for the log: what the scan saw and how it ranked it. */
+export function describeCandidates(result: SniffResult): string[] {
+  return result.candidates.map((c) => {
+    const flags = [
+      result.best?.id === c.id ? 'scelto' : '',
+      isPlausibleMain(c) ? '' : 'non plausibile',
+      c.ad ? 'pubblicità' : '',
+      c.drm ? 'drm' : '',
+      c.live ? 'diretta' : ''
+    ].filter(Boolean)
+    const duration = c.duration != null ? `${Math.round(c.duration * 10) / 10}s` : '?s'
+    const size = c.size != null ? `${Math.round(c.size / 1024)}KB` : '?KB'
+    const height = c.height ? `${c.height}p` : '?p'
+    const url = c.url.length > 160 ? `${c.url.slice(0, 157)}...` : c.url
+    return `${c.kind} ${duration} ${size} ${height} punti=${c.score}${flags.length ? ` [${flags.join(', ')}]` : ''} ${url}`
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -239,10 +274,11 @@ export async function sniffPage(opts: SniffOptions): Promise<SniffResult> {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
+      // A hidden window created with show: false and no background throttling stays "visible"
+      // to the page (Page Visibility API), so players that pause when hidden still start.
+      // No offscreen rendering: it cannot deliver clicks to cross-origin iframes.
       backgroundThrottling: false,
-      autoplayPolicy: 'no-user-gesture-required',
-      // Offscreen rendering keeps the page "visible" to players that pause when hidden.
-      offscreen: !opts.visible
+      autoplayPolicy: 'no-user-gesture-required'
     }
   })
   const wc = win.webContents
@@ -255,7 +291,6 @@ export async function sniffPage(opts: SniffOptions): Promise<SniffResult> {
   }
   wc.setAudioMuted(!opts.visible)
   wc.setUserAgent(opts.userAgent)
-  if (!opts.visible) wc.setFrameRate(10)
 
   const hits = new Map<string, RawHit>()
   const enriched = new Map<string, Partial<StreamCandidate>>()
@@ -269,6 +304,8 @@ export async function sniffPage(opts: SniffOptions): Promise<SniffResult> {
   let pageLoaded = false
   let closed = false
   const pending: Promise<void>[] = []
+  /** URLs whose manifest / ffprobe enrichment is still running. */
+  const probing = new Set<string>()
 
   const build = (): SniffResult => {
     const list: StreamCandidate[] = []
@@ -293,9 +330,11 @@ export async function sniffPage(opts: SniffOptions): Promise<SniffResult> {
       list.push({ ...base, id: url, score: scoreCandidate(base) })
     }
     if (list.some((c) => c.drm)) drmDetected = true
-    const { sorted, best, ambiguous } = rankCandidates(list)
-    return { pageUrl: opts.url, pageTitle: pageTitle || opts.url, thumbnail, candidates: sorted, best, ambiguous, drmDetected }
+    const { sorted, best, ambiguous, doubtful } = rankCandidates(list)
+    return { pageUrl: opts.url, pageTitle: pageTitle || opts.url, thumbnail, candidates: sorted, best, ambiguous, doubtful, drmDetected }
   }
+  /** A plausible main video whose duration/size is already known (not still being probed). */
+  const hasPlausibleMain = (): boolean => build().candidates.some((c) => isPlausibleMain(c) && !probing.has(c.url))
 
   const fetchText = async (url: string, hit: RawHit): Promise<string | null> => {
     try {
@@ -352,7 +391,13 @@ export async function sniffPage(opts: SniffOptions): Promise<SniffResult> {
       hits.set(hit.url, hit)
       lastNewHit = Date.now()
       log(`[sniffer] ${hit.classified.kind} ${hit.url}`)
-      const p = enrich(hit).then(() => opts.onUpdate?.(build()))
+      probing.add(hit.url)
+      const p = enrich(hit)
+        .catch(() => undefined)
+        .then(() => {
+          probing.delete(hit.url)
+          opts.onUpdate?.(build())
+        })
       pending.push(p)
       opts.onUpdate?.(build())
     },
@@ -413,7 +458,11 @@ export async function sniffPage(opts: SniffOptions): Promise<SniffResult> {
     await Promise.race([Promise.allSettled(pending), sleep(8000)])
     routes.delete(wc.id)
     if (!closed) win.destroy()
-    return build()
+    const result = build()
+    const verdict = result.doubtful ? ', solo clip brevi' : result.ambiguous ? ', ambiguo' : ''
+    log(`[sniffer] risultato per ${opts.url}: ${result.candidates.length} flussi${verdict}`)
+    for (const line of describeCandidates(result)) log(`[sniffer]   ${line}`)
+    return result
   }
 
   try {
@@ -436,32 +485,42 @@ export async function sniffPage(opts: SniffOptions): Promise<SniffResult> {
       return await finish()
     }
 
-    // Automatic: escalate from autoplay to clicks, stop once things settle.
+    // Automatic: escalate from autoplay to clicks until a plausible main video shows up.
+    // Short clips (an intro, a hover preview, a pre-loaded teaser) do not stop the escalation:
+    // on many sites the real player starts only after one or two clicks (the first one is
+    // often swallowed by an overlay or a pop-up).
+    const clickPlayer = async (): Promise<void> => {
+      const target = (await wc.executeJavaScript(FIND_PLAYER_SCRIPT).catch(() => null)) as { x: number; y: number } | null
+      if (target) await trustedClick(wc, target.x, target.y)
+    }
     const steps: (() => Promise<unknown>)[] = [
       () => inAllFrames(wc, PLAY_SCRIPT),
       () => inAllFrames(wc, CLICK_PLAY_BUTTONS_SCRIPT),
-      async () => {
-        const target = (await wc.executeJavaScript(FIND_PLAYER_SCRIPT).catch(() => null)) as { x: number; y: number } | null
-        if (target) trustedClick(wc, target.x, target.y)
-      },
+      clickPlayer,
+      () => Promise.all([inAllFrames(wc, PLAY_SCRIPT), inAllFrames(wc, CLICK_PLAY_BUTTONS_SCRIPT)]),
+      clickPlayer,
       () => inAllFrames(wc, PLAY_SCRIPT)
     ]
+    // Lets running probes finish (bounded), so that a 2-second clip is not taken for the video.
+    const settleProbes = () => Promise.race([Promise.allSettled([...pending]), sleep(4000, opts.signal)])
     await sleep(1500, opts.signal)
     for (const step of steps) {
       if (closed || opts.signal?.aborted || Date.now() > deadline) break
       await readDom().catch(() => undefined)
-      const current = build()
-      const plausible = current.candidates.some((c) => !c.ad && !c.drm && c.kind !== 'audio')
+      await settleProbes()
       // Clicking around does not help with DRM-protected content.
-      if (plausible || current.drmDetected) break
+      if (hasPlausibleMain() || build().drmDetected) break
       await step().catch(() => undefined)
       await sleep(2500, opts.signal)
     }
-    // Wait for the network to settle (no new media for 3 s) or the deadline.
-    // With nothing found after every attempt, give late players 3 more seconds and stop.
+    // Once a plausible video is known, wait for the network to settle (no new media for 3 s)
+    // or the deadline. With only short clips (or nothing) after every attempt, give late
+    // players a few more seconds and stop.
     const giveUpAt = Math.min(deadline, Date.now() + 3000)
-    while (!closed && !opts.signal?.aborted && Date.now() < (hits.size ? deadline : giveUpAt)) {
-      if (hits.size && Date.now() - lastNewHit > 3000) break
+    while (!closed && !opts.signal?.aborted) {
+      const found = hasPlausibleMain()
+      if (Date.now() >= (found ? deadline : giveUpAt)) break
+      if (found && Date.now() - lastNewHit > 3000) break
       await sleep(500, opts.signal)
     }
     return await finish()

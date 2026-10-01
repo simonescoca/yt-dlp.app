@@ -1,4 +1,4 @@
-import { AudioLines, Film, Radio, ShieldAlert } from 'lucide-react'
+import { AudioLines, ExternalLink, Film, Radio, ShieldAlert } from 'lucide-react'
 import type { Job, SniffResult, StreamCandidate } from '@shared/types'
 import { formatBytes, formatDuration, hostOf } from '../format'
 import { useI18n } from '../i18n'
@@ -17,8 +17,25 @@ export function StreamDialog({ job, sniff, onClose }: { job: Job; sniff: SniffRe
     void api().chooseStream(job.id, id)
     onClose()
   }
+  const openPage = (): void => {
+    void api().scanInteractively(job.id)
+    onClose()
+  }
+  // Only short clips found: the real video probably starts after a click in the page.
+  const footer = sniff.doubtful ? (
+    <button className="btn btn-primary" data-testid="stream-open-page" onClick={openPage}>
+      <ExternalLink size={16} />
+      {t('action.openPage')}
+    </button>
+  ) : undefined
   return (
-    <Modal title={t('stream.title')} subtitle={t('stream.subtitle')} icon={<Film size={20} />} onClose={onClose}>
+    <Modal
+      title={t(sniff.doubtful ? 'stream.shortTitle' : 'stream.title')}
+      subtitle={t(sniff.doubtful ? 'stream.shortSubtitle' : 'stream.subtitle')}
+      icon={<Film size={20} />}
+      onClose={onClose}
+      footer={footer}
+    >
       <div data-testid="stream-options">
         {sniff.candidates.map((c) => {
           const Icon = c.drm ? ShieldAlert : c.kind === 'audio' ? AudioLines : c.live ? Radio : Film

@@ -18,6 +18,8 @@ import { DownloadError, type DownloadRequest } from '../ytdlp/download'
 import { outputExtension, sanitizeFileName, uniqueFileName } from '../ytdlp/options'
 import type { ProgressSnapshot } from '../ytdlp/progress'
 import type { EngineContext } from '../ytdlp/runner'
+import { looksLikeMediaUrl } from '../sniffer/classify'
+import { SHORT_CLIP_SECONDS } from '../sniffer/rank'
 
 export interface SniffRequest {
   url: string
@@ -53,6 +55,18 @@ const ACTIVE: ReadonlySet<Job['status']> = new Set(['analyzing', 'scanning', 'do
 const FINISHED: ReadonlySet<Job['status']> = new Set(['completed', 'failed', 'cancelled'])
 const PROGRESS_INTERVAL_MS = 250
 const MAX_HISTORY = 500
+/** yt-dlp extractors that simply take the first video found in a web page. */
+const FIRST_VIDEO_EXTRACTORS: ReadonlySet<string> = new Set(['generic', 'html5'])
+
+/**
+ * yt-dlp's generic / HTML5 extractors take the first video of a page: often an intro or a
+ * preview of a few seconds (usually with no known duration) while the real player waits for a
+ * click. Such results are double-checked with a page scan; links to media files are not.
+ */
+export function worthScanning(url: string, m: MediaSummary): boolean {
+  if (!FIRST_VIDEO_EXTRACTORS.has(m.extractor) || looksLikeMediaUrl(url)) return false
+  return m.duration == null || m.duration < SHORT_CLIP_SECONDS
+}
 
 type Resume = { kind: 'info'; infoJson: string; media: MediaSummary } | { kind: 'stream'; candidate: StreamCandidate; title: string }
 
@@ -240,7 +254,9 @@ export class JobManager extends EventEmitter<{ job: [Job]; removed: [string]; ch
       if (!result.candidates.some((c) => !c.drm)) {
         throw new JobFailure({ code: result.drmDetected ? 'drm' : 'no_media', message: 'Nessun video trovato nella pagina' })
       }
-      this.patch(job, { status: 'waiting', pending: { type: 'stream', sniff: result }, title: job.title ?? result.pageTitle, thumbnail: job.thumbnail ?? result.thumbnail })
+      // The user just drove the page: no "open the page" advice for short clips here.
+      const sniff = { ...result, doubtful: false }
+      this.patch(job, { status: 'waiting', pending: { type: 'stream', sniff }, title: job.title ?? result.pageTitle, thumbnail: job.thumbnail ?? result.thumbnail })
     } catch (err) {
       if (job.status === 'scanning') this.finish(job, 'failed', { error: toJobError(err) })
     } finally {
@@ -324,6 +340,14 @@ export class JobManager extends EventEmitter<{ job: [Job]; removed: [string]; ch
 
     if (result.kind === 'video') {
       const m = result.media
+      if (worthScanning(job.url, m)) {
+        this.log(`[job ${job.id}] yt-dlp (${m.extractor}) ha preso il primo video della pagina (durata ${m.duration ?? '?'} s) → controllo con la scansione`)
+        this.patch(job, { status: 'scanning' })
+        const scanned = await this.deps.sniff({ url: job.url, signal })
+        if (signal.aborted) return
+        if (await this.useScan(job, ctx, signal, tempDir, scanned)) return
+        this.log(`[job ${job.id}] la scansione non ha trovato video: uso quello di yt-dlp`)
+      }
       this.patch(job, { title: job.playlistTitle ? (job.title ?? m.title) : m.title, thumbnail: m.thumbnail ?? job.thumbnail, source: m.extractor, duration: m.duration })
       return this.downloadMedia(job, ctx, signal, tempDir, result.infoJson)
     }
@@ -347,16 +371,22 @@ export class JobManager extends EventEmitter<{ job: [Job]; removed: [string]; ch
     if (signal.aborted) return
     // Even when nothing is found, the page title is a better label than the bare URL.
     if (!job.title && result.pageTitle && result.pageTitle !== job.url) this.patch(job, { title: result.pageTitle, thumbnail: result.thumbnail })
-    if (!result.best) {
-      if (result.drmDetected) throw new JobFailure({ code: 'drm', message: 'Il video è protetto da DRM' })
-      throw new JobFailure({ code: cause.code === 'forbidden' ? 'forbidden' : 'no_media', message: cause.message })
-    }
+    if (await this.useScan(job, ctx, signal, tempDir, result)) return
+    if (result.drmDetected) throw new JobFailure({ code: 'drm', message: 'Il video è protetto da DRM' })
+    throw new JobFailure({ code: cause.code === 'forbidden' ? 'forbidden' : 'no_media', message: cause.message })
+  }
+
+  /** Downloads the best stream of a scan, or asks the user. False when the scan found nothing usable. */
+  private async useScan(job: Job, ctx: EngineContext, signal: AbortSignal, tempDir: string, result: SniffResult): Promise<boolean> {
+    if (!result.best) return false
     this.patch(job, { title: result.pageTitle, thumbnail: result.thumbnail ?? job.thumbnail, source: 'sniffer', duration: result.best.duration })
-    if (result.ambiguous) {
+    // Several different videos, or only short clips (probably not the video the user wants): ask.
+    if (result.ambiguous || result.doubtful) {
       this.patch(job, { status: 'waiting', pending: { type: 'stream', sniff: result } })
-      return
+      return true
     }
-    return this.downloadStream(job, ctx, result.best, result.pageTitle, signal, tempDir)
+    await this.downloadStream(job, ctx, result.best, result.pageTitle, signal, tempDir)
+    return true
   }
 
   private downloadStream(job: Job, ctx: EngineContext, c: StreamCandidate, title: string, signal: AbortSignal, tempDir: string): Promise<void> {

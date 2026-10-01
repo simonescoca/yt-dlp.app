@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ensureMedia, MEDIA_DIR } from '../fixtures/media'
@@ -66,6 +66,28 @@ test('"Open the page": the user starts the video, the app finds it', async () =>
   await dialog.locator('.option').first().click()
   await expect(card).toHaveAttribute('data-status', 'completed', { timeout: 60_000 })
   expect(existsSync(join(out, 'Video da avviare a mano.mp4'))).toBe(true)
+  await app.close()
+})
+
+test('only a short clip in the page: nothing is downloaded, the app asks and offers "Open the page"', async () => {
+  const out = mkdtempSync(join(tmpdir(), 'grabbit-short-'))
+  const { app, page } = await launchApp({ seedEngine: true })
+  await page.evaluate((folder) => window.grabbit.updateSettings({ language: 'it', folder }), out)
+  await page.getByTestId('url-input').fill(`${server.origin}/teaser-only.html`)
+  await page.getByTestId('download-button').click()
+  const dialog = page.getByRole('dialog', { name: 'Ho trovato solo video brevi' })
+  await expect(dialog).toBeVisible({ timeout: 90_000 })
+  await expect(dialog.locator('.option')).toHaveCount(1)
+  await expect(dialog.locator('.option')).toContainText('0:02')
+  const card = page.getByTestId('job').first()
+  await expect(card).toHaveAttribute('data-status', 'waiting')
+  expect(readdirSync(out)).toEqual([])
+
+  const popup = app.waitForEvent('window')
+  await dialog.getByTestId('stream-open-page').click()
+  const win = await popup
+  await expect(card).toHaveAttribute('data-status', 'scanning')
+  await win.close()
   await app.close()
 })
 

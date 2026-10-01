@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StreamCandidate } from '../../src/shared/types'
 import { toNetscape } from '../../src/main/browser/cookies'
-import { classifyResponse, looksLikeAd, looksLikeDrmLicense, totalSize } from '../../src/main/sniffer/classify'
+import { classifyResponse, looksLikeAd, looksLikeDrmLicense, looksLikeMediaUrl, totalSize } from '../../src/main/sniffer/classify'
 import { parseAttributes, parseDash, parseHls, parseIsoDuration } from '../../src/main/sniffer/manifest'
 import { isPlausibleMain, rankCandidates, scoreCandidate } from '../../src/main/sniffer/rank'
 
@@ -156,6 +156,38 @@ describe('ranking', () => {
   it('never picks DRM streams', () => {
     const drm = cand({ kind: 'dash', height: 2160, duration: 5000, drm: true })
     expect(rankCandidates([drm]).best).toBeNull()
+  })
+  it('a sharp short clip never beats a plausible main video, whatever its resolution', () => {
+    const teaser = cand({ kind: 'progressive', height: 4320, duration: 2, size: 900_000 })
+    const main = cand({ kind: 'progressive', height: 360, duration: 3900, size: 400_000_000 })
+    expect(teaser.score).toBeGreaterThan(main.score) // by points alone the teaser would win
+    const r = rankCandidates([teaser, main])
+    expect(r.best).toBe(main)
+    expect(r.sorted).toEqual([main, teaser])
+    expect(r.doubtful).toBe(false)
+    expect(r.ambiguous).toBe(false)
+  })
+  it('only short clips, tiny files or ads: doubtful (never downloaded without asking)', () => {
+    const teaser = cand({ kind: 'progressive', duration: 2, height: 720, size: 800_000 })
+    const r = rankCandidates([teaser])
+    expect(r.best).toBe(teaser)
+    expect(r.doubtful).toBe(true)
+    expect(rankCandidates([cand({ kind: 'progressive', size: 200_000 })]).doubtful).toBe(true)
+    expect(rankCandidates([cand({ kind: 'progressive', ad: true, duration: 600 })]).doubtful).toBe(true)
+    expect(rankCandidates([]).doubtful).toBe(false)
+    // Unknown duration (live, or not probed): not doubtful.
+    expect(rankCandidates([cand({ kind: 'hls', height: 720 })]).doubtful).toBe(false)
+  })
+})
+
+describe('direct media links', () => {
+  it('tells media files and manifests from web pages', () => {
+    expect(looksLikeMediaUrl('https://cdn/v/video.mp4?token=1')).toBe(true)
+    expect(looksLikeMediaUrl('https://cdn/hls/master.m3u8')).toBe(true)
+    expect(looksLikeMediaUrl('https://cdn/dash/manifest.mpd')).toBe(true)
+    expect(looksLikeMediaUrl('https://cdn/a/song.mp3')).toBe(true)
+    expect(looksLikeMediaUrl('https://site/episodes/some-title-episode-1/')).toBe(false)
+    expect(looksLikeMediaUrl('https://site/watch?v=mp4')).toBe(false)
   })
 })
 
