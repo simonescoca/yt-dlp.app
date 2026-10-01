@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { ComponentManager } from '../../src/main/engine/components'
 import { createNodeHttp } from '../../src/main/engine/http'
 import { detectTarget } from '../../src/main/engine/sources'
-import { DEV_BIN_DIR } from './env'
+import { DEV_BIN_DIR, exe } from './env'
 
 
 describe('real engine install (network)', () => {
@@ -24,6 +24,6 @@ describe('real engine install (network)', () => {
     console.log('yt-dlp', version, m.getStates())
     expect(version).toMatch(/^\d{4}\.\d{2}\.\d{2}/)
     expect(execFileSync(paths.deno, ['--version']).toString()).toMatch(/^deno \d/)
-    expect(execFileSync(join(paths.ffmpegDir, 'ffmpeg'), ['-hide_banner', '-version']).toString()).toMatch(/^ffmpeg version/)
+    expect(execFileSync(join(paths.ffmpegDir, exe('ffmpeg')), ['-hide_banner', '-version']).toString()).toMatch(/^ffmpeg version/)
   }, 600_000)
 })

@@ -9,7 +9,7 @@ import { browserUserAgent, sniffPage } from '../../src/main/sniffer/sniffer'
 import { download } from '../../src/main/ytdlp/download'
 import { ensureMedia, MEDIA_DIR } from '../fixtures/media'
 import { startFixtureServer, type FixtureServer } from '../fixtures/server'
-import { devEnginePaths, ffprobe } from '../integration/env'
+import { devEnginePaths, exe, ffprobe } from '../integration/env'
 import { after, before, run, test } from './harness'
 
 const ROOT = resolve(__dirname, '../..')
@@ -27,12 +27,12 @@ const sniff = (path: string, extra: Partial<Parameters<typeof sniffPage>[0]> = {
     session: ses,
     userAgent: ua,
     timeoutMs: 20_000,
-    probe: ffprobeProber(join(paths.ffmpegDir, 'ffprobe')),
+    probe: ffprobeProber(join(paths.ffmpegDir, exe('ffprobe'))),
     ...extra
   })
 
 before(async () => {
-  ensureMedia(join(paths.ffmpegDir, 'ffmpeg'))
+  ensureMedia(join(paths.ffmpegDir, exe('ffmpeg')))
   b = await startFixtureServer([PAGES, MEDIA_DIR, HLSJS], undefined, 'localhost')
   a = await startFixtureServer([PAGES, MEDIA_DIR, HLSJS], (req, res) => {
     if (req.url !== '/iframe.html') return false

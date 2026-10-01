@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Scarica video e audio da YouTube e da qualsiasi sito, alla massima qualità, con yt-dlp sempre aggiornato.",
   "author": "Simone Scoca",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
@@ -19,7 +19,8 @@
     "dist:win": "electron-vite build && electron-builder --win --x64",
     "dist:dir": "electron-vite build && electron-builder --dir",
     "test:integration": "vitest run -c vitest.integration.config.ts",
-    "test:electron": "node scripts/run-electron-tests.mjs"
+    "test:electron": "node scripts/run-electron-tests.mjs",
+    "icon": "electron scripts/render-icon.cjs"
   },
   "dependencies": {
     "extract-zip": "^2.0.1"
@@ -42,5 +43,10 @@
     "typescript": "^6.0.3",
     "vite": "^7.3.6",
     "vitest": "^5.0.3"
+  },
+  "homepage": "https://github.com/simonescoca/yt-dlp.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simonescoca/yt-dlp.app.git"
   }
 }

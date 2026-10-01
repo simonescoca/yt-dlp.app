@@ -1,14 +1,27 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 export const MEDIA_DIR = resolve(__dirname, 'media')
+
+/** ffmpeg installed by tests/integration/engine-install.test.ts, else the one on PATH. */
+function defaultFfmpeg(): string {
+  try {
+    const bin = resolve(__dirname, '../../.dev-data/bin')
+    const manifest = JSON.parse(readFileSync(join(bin, 'manifest.json'), 'utf8')) as { components: { ffmpeg?: { folder: string } } }
+    const folder = manifest.components.ffmpeg?.folder
+    if (folder) return join(bin, 'ffmpeg', folder, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
+  } catch {
+    /* not installed */
+  }
+  return 'ffmpeg'
+}
 
 /**
  * Generates the test media (once): a progressive MP4, an HLS stream with two
  * qualities (master playlist), a DASH stream and a short "ad" clip.
  */
-export function ensureMedia(ffmpeg = 'ffmpeg'): string {
+export function ensureMedia(ffmpeg = defaultFfmpeg()): string {
   const marker = join(MEDIA_DIR, '.ready-v3')
   if (existsSync(marker)) return MEDIA_DIR
   mkdirSync(join(MEDIA_DIR, 'hls'), { recursive: true })

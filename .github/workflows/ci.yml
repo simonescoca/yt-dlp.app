@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux = development platform; macOS (Apple Silicon) and Windows = shipped platforms.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      # Linux runners need a virtual display for Electron (the runner context is not available here).
+      RUN: ${{ matrix.os == 'ubuntu-latest' && 'xvfb-run -a' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Install the real engine for this OS (yt-dlp nightly, Deno, ffmpeg)
+        run: npm run test:integration -- tests/integration/engine-install.test.ts
+      - name: yt-dlp integration tests (local fixtures)
+        run: npm run test:integration -- tests/integration/ytdlp.test.ts
+      - run: npm run build
+      - name: Page scanner tests (inside Electron)
+        shell: bash
+        run: $RUN node scripts/run-electron-tests.mjs sniffer.etest
+      - name: End-to-end tests (real app)
+        shell: bash
+        run: $RUN npx playwright test
+      - name: Upload screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.os }}
+          path: |
+            docs/screenshots
+            test-results
+          if-no-files-found: ignore

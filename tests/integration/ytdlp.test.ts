@@ -9,7 +9,7 @@ import type { ProgressSnapshot } from '../../src/main/ytdlp/progress'
 import type { EngineContext } from '../../src/main/ytdlp/runner'
 import { ensureMedia, MEDIA_DIR } from '../fixtures/media'
 import { startFixtureServer, type FixtureServer } from '../fixtures/server'
-import { devEnginePaths, ffprobe } from './env'
+import { devEnginePaths, exe, ffprobe } from './env'
 
 const paths = devEnginePaths()
 const ctx: EngineContext = { paths }
@@ -38,7 +38,7 @@ async function run(url: string, o: DownloadOptions, fileBase: string, extra: { s
 }
 
 beforeAll(async () => {
-  ensureMedia(join(paths.ffmpegDir, 'ffmpeg'))
+  ensureMedia(join(paths.ffmpegDir, exe('ffmpeg')))
   // Serves the media slowly under /slow/ (to test cancellation mid-download).
   server = await startFixtureServer([MEDIA_DIR], (req, res) => {
     if (!req.url?.startsWith('/slow/')) return false

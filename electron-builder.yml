@@ -1,0 +1,61 @@
+# Packaging: macOS (Apple Silicon) .dmg + .zip, Windows (x64) NSIS installer.
+# yt-dlp, ffmpeg and Deno are NOT bundled: the app downloads and updates them on first start.
+appId: com.simonescoca.grabbit
+productName: Grabbit
+copyright: Copyright © 2026 Simone Scoca
+directories:
+  output: release/${version}
+  buildResources: build
+files:
+  - out/**
+  - package.json
+  - '!out/etest/**'
+asar: true
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  category: public.app-category.utilities
+  icon: build/icon.png
+  # No Apple Developer certificate: ad-hoc signature (Apple Silicon refuses unsigned apps).
+  # Ad-hoc signing + hardened runtime would reject Electron's pre-signed frameworks.
+  identity: '-'
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  minimumSystemVersion: '12.0'
+  extendInfo:
+    NSHumanReadableCopyright: Copyright © 2026 Simone Scoca
+
+dmg:
+  title: ${productName} ${version}
+  contents:
+    - { x: 150, y: 190, type: file }
+    - { x: 450, y: 190, type: link, path: /Applications }
+  window: { width: 600, height: 400 }
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  runAfterFinish: true
+  shortcutName: Grabbit
+  deleteAppDataOnUninstall: false
+
+linux:
+  # Development / CI only (the app is distributed for macOS and Windows).
+  target: [dir]
+  category: Utility
+  icon: build/icon.png
+
+publish: null

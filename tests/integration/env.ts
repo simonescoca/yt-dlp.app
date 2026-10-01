@@ -32,6 +32,8 @@ export interface Probe {
   streams: ProbeStream[]
 }
 
+export const exe = (name: string): string => name + exeSuffix(detectTarget())
+
 export function ffprobe(paths: EnginePaths, file: string): Probe {
   const out = execFileSync(join(paths.ffmpegDir, `ffprobe${exeSuffix(detectTarget())}`), [
     '-v',

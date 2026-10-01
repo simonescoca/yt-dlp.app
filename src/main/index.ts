@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, Notification, shell } from 'electron'
 import { AppCore } from './core/app-core'
 import { registerIpc } from './ipc'
+import { setupMenu } from './menu'
 
 // Allow tests (and developers) to isolate app data from the real profile.
 if (process.env['GRABBIT_USER_DATA']) app.setPath('userData', process.env['GRABBIT_USER_DATA'])
@@ -65,6 +66,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     app.setAppUserModelId('com.simonescoca.grabbit')
+    setupMenu()
     await core.init()
     registerIpc(core, () => mainWindow)
     notifyCompletions()

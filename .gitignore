@@ -10,3 +10,4 @@ playwright-report/
 Thumbs.db
 tests/fixtures/media/
 .dev-data/
+release/

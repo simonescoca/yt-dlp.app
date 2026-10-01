@@ -22,11 +22,14 @@ export async function launchApp(opts: LaunchOptions = {}): Promise<{ app: Electr
   if (opts.seedEngine && existsSync(DEV_BIN) && !existsSync(join(userData, 'bin'))) {
     cpSync(DEV_BIN, join(userData, 'bin'), { recursive: true, verbatimSymlinks: true })
   }
-  const args = [join(ROOT, 'out/main/index.js')]
+  // GRABBIT_E2E_EXECUTABLE runs the suite against a packaged build instead of out/main.
+  const executablePath = process.env['GRABBIT_E2E_EXECUTABLE']
+  const args = executablePath ? [] : [join(ROOT, 'out/main/index.js')]
   // Containers run as root, where Chromium refuses to start without this flag.
   if (process.getuid?.() === 0) args.push('--no-sandbox')
   args.push(...(opts.args ?? []))
   const app = await electron.launch({
+    executablePath,
     args,
     env: { ...process.env, GRABBIT_USER_DATA: userData, ...opts.env } as Record<string, string>
   })
