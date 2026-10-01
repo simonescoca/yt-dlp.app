@@ -90,6 +90,17 @@ describe('checksums', () => {
     expect(map.size).toBe(3)
     expect(map.get('yt-dlp_macos.zip')).toBe('e870a19610f46e13e6b76eb3d4bc2c637a04c7cecc98951bb03173cf8c023fed')
   })
+  it('reads the PowerShell Get-FileHash format Deno uses for Windows builds', () => {
+    const ps = [
+      '',
+      'Algorithm : SHA256',
+      'Hash      : A0C3101B4158D1DFB7D6A78A7BF0F3DE80C96BB423C152BEEC8BEB22786F2238',
+      'Path      : C:\\a\\deno\\deno\\target\\release\\deno-x86_64-pc-windows-msvc.zip',
+      ''
+    ].join('\r\n')
+    expect(findChecksum(ps, 'deno-x86_64-pc-windows-msvc.zip')).toBe('a0c3101b4158d1dfb7d6a78a7bf0f3de80c96bb423c152beec8beb22786f2238')
+    expect(findChecksum('Algorithm : SHA256\nHash : ' + 'B'.repeat(64) + '\nPath : /x/other.zip', 'whatever.zip')).toBe('b'.repeat(64))
+  })
   it('finds a hash by name, or the only hash of single-entry files', () => {
     expect(findChecksum(sums, 'yt-dlp_win.zip')).toBe('36f09490817a70b12de29c9bc48c848f3f42ac1ec17af37d43d6c31a56e071ae')
     expect(findChecksum(sums, 'missing.zip')).toBeNull()

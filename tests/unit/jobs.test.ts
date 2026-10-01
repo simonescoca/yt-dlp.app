@@ -7,11 +7,13 @@ import { JobManager, newJob, type JobDeps } from '../../src/main/core/jobs'
 import { AnalyzeError, type AnalyzeResult } from '../../src/main/ytdlp/analyze'
 import { DownloadError, type DownloadRequest } from '../../src/main/ytdlp/download'
 
+// A real, writable folder: the manager creates it (a fixed path like /downloads only worked as root).
+const DL = mkdtempSync(join(tmpdir(), 'grabbit-downloads-'))
 const options: DownloadOptions = {
   mode: 'video',
   videoFormat: 'mp4',
   audioFormat: 'mp3',
-  folder: '/downloads',
+  folder: DL,
   embedMetadata: true,
   embedThumbnail: true,
   preferCompatible: false
@@ -104,7 +106,7 @@ describe('JobManager', () => {
     const job = m.add('https://site/Video bello', options)
     const done = await settled(job.id)
     expect(done.status).toBe('completed')
-    expect(done.filePath).toBe(join('/downloads', 'Video bello.mp4'))
+    expect(done.filePath).toBe(join(DL, 'Video bello.mp4'))
     expect(done.title).toBe('Video bello')
     expect(done.source).toBe('youtube')
     expect(downloads[0]!.infoJsonFile).toMatch(/info\.json$/)
@@ -112,7 +114,7 @@ describe('JobManager', () => {
   })
 
   it('never overwrites: picks "title (2)" when the file exists', async () => {
-    const { m, downloads, settled } = setup({ fileExists: (p) => p === join('/downloads', 'Clip.mp4') })
+    const { m, downloads, settled } = setup({ fileExists: (p) => p === join(DL, 'Clip.mp4') })
     await settled(m.add('https://site/Clip', options).id)
     expect(downloads[0]!.fileBase).toBe('Clip (2)')
   })
@@ -181,7 +183,7 @@ describe('JobManager', () => {
     expect(removed).toEqual([job.id])
     await vi.waitFor(() => expect(m.list().every((j) => j.status === 'completed')).toBe(true))
     expect(downloads.map((d) => d.fileBase).sort()).toEqual(['01 - A', '03 - C'])
-    expect(downloads[0]!.outputDir).toBe(join('/downloads', 'Mia꞉ lista'))
+    expect(downloads[0]!.outputDir).toBe(join(DL, 'Mia꞉ lista'))
   })
 
   it('falls back to the page scanner when yt-dlp does not support the site', async () => {

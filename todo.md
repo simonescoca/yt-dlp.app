@@ -319,3 +319,8 @@ non supportati.
 
 ### 2026-10-01 — Push su GitHub ✅
 - L'utente ha sistemato i permessi: il branch `claude/video-downloader-app-fbjjup` è stato pubblicato su GitHub con tutti i commit, e la **CI** è partita su Linux, macOS e Windows. Problema aperto n. 1 risolto.
+
+### 2026-10-01 — Prima CI su GitHub: due fallimenti trovati e corretti 🔧
+- **Scivolone 25 (bug nei test, nascosto dall'ambiente):** i test del `JobManager` usavano `/downloads` come cartella di destinazione, e il codice la crea davvero con `mkdir`. Nel container funzionava solo perché i test giravano come **root**; sui runner Linux e macOS (utente normale) `mkdir /downloads` fallisce, quindi ogni lavoro finiva con "permission" e 11 test fallivano. Su Windows passavano perché `/downloads` diventa `C:\downloads`. **Soluzione:** i test usano una cartella temporanea vera. Lezione: lavorare come root nasconde i problemi di permessi.
+- **Scivolone 26 (bug vero dell'app, solo su Windows):** l'installazione del motore falliva con "Checksum di Deno non trovato". Per le build Windows Deno pubblica il checksum nel formato **PowerShell** (`Get-FileHash | Format-List`: `Hash : A0C3…`, `Path : C:\…`), non nel formato `sha256sum` usato per macOS e Linux. **Senza la CI su Windows, l'app non sarebbe mai partita su un PC al primo avvio.** **Soluzione:** il parser dei checksum legge anche quel formato. Verificato sui file reali di Deno 2.9.7 per Windows, macOS e Linux, + test unitario.
+- Nota: nel container è rimasta la cartella vuota `/downloads/Mia꞉ lista`, creata dai vecchi test; i controlli di sicurezza non permettono di rimuovere cartelle di primo livello. Non tocca il progetto.

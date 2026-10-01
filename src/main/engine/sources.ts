@@ -172,11 +172,29 @@ export function parseChecksums(text: string): Map<string, string> {
   return out
 }
 
+/**
+ * Reads PowerShell `Get-FileHash | Format-List` output (used by Deno for its Windows builds):
+ *   Algorithm : SHA256
+ *   Hash      : A0C3…
+ *   Path      : C:\a\deno\…\deno-x86_64-pc-windows-msvc.zip
+ */
+function parsePowerShellHashes(text: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const block of text.split(/\r?\n\s*\r?\n/)) {
+    const hash = /^\s*Hash\s*:\s*([A-Fa-f0-9]{64})\s*$/m.exec(block)?.[1]
+    if (!hash) continue
+    const path = /^\s*Path\s*:\s*(.+?)\s*$/m.exec(block)?.[1] ?? ''
+    out.set(path.split(/[\\/]/).pop() ?? '', hash.toLowerCase())
+  }
+  return out
+}
+
 /** Looks up a hash for `name`; single-entry files (e.g. "file.zip.sha256") match regardless of name. */
 export function findChecksum(text: string, name: string): string | null {
-  const map = parseChecksums(text)
-  const direct = map.get(name)
-  if (direct) return direct
-  if (map.size === 1) return [...map.values()][0]!
+  for (const map of [parseChecksums(text), parsePowerShellHashes(text)]) {
+    const direct = map.get(name)
+    if (direct) return direct
+    if (map.size === 1) return [...map.values()][0]!
+  }
   return null
 }
