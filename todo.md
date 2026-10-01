@@ -72,7 +72,7 @@ non supportati.
 ### Fase 2 — Motore
 - [x] **T2** Gestore componenti: download con progresso, verifica SHA-256, estrazione zip/tar.xz, versioni, controllo aggiornamenti (yt-dlp nightly, Deno, ffmpeg); firma ad-hoc/rimozione quarantena su macOS
   - *Test:* unit (parsing versioni/checksum, URL per piattaforma) + installazione reale dei componenti Linux nel container
-- [ ] **T3** Wrapper yt-dlp: costruzione argomenti (video/audio, contenitori, compatibilità, metadati), analisi `-J`, parser di progresso, esecuzione annullabile, classificazione errori
+- [x] **T3** Wrapper yt-dlp: costruzione argomenti (video/audio, contenitori, compatibilità, metadati), analisi `-J`, parser di progresso, esecuzione annullabile, classificazione errori
   - *Test:* unit sul builder e sul parser + download reali (fixture locali mp4/HLS/DASH generate con ffmpeg, siti reali se raggiungibili)
 - [ ] **T4** Sniffer di rete: finestra Chromium nascosta, cattura `webRequest` su tutti i frame, ispezione DOM, autoplay silenzioso, classificazione (m3u8/mpd/mp4/webm…), parsing di master m3u8/mpd, esclusione segmenti e pubblicità, ranking e rilevamento ambiguità, rilevamento DRM
   - *Test:* unit su classificazione/ranking/parsing + pagine fixture locali (mp4 diretto, HLS via hls.js, DASH, iframe cross-origin, pubblicità finta, player che si avvia solo al click)
@@ -135,3 +135,26 @@ non supportati.
 - *Test:* 10 test unitari sulle fonti + 5 sul `ComponentManager`, eseguiti con un server finto e archivi zip/tar.xz veri (installazione, nessun download superfluo al riavvio, aggiornamento a una nuova nightly con rimozione della vecchia, `maxAge`, checksum errato, modalità offline) ✅.
 - *Test di integrazione reale* (`npm run test:integration`): installati yt-dlp nightly 2026.09.27.232945, Deno v2.9.7 e ffmpeg N-127043 in 17 s. yt-dlp in versione onedir si avvia in 0,48 s ✅.
 - ⚠️ *Da verificare:* i percorsi macOS e Windows non si possono provare nel container Linux. Verranno verificati con GitHub Actions (runner `macos-14` arm64 e `windows-latest`) in T16.
+
+### 2026-10-01 — T3 · Wrapper yt-dlp ✅ (con un limite d'ambiente aperto)
+- Moduli in `src/main/ytdlp/`:
+  - `options.ts`: selezione dei formati e contenitori (funzioni pure), nomi file sicuri per Windows/macOS, nomi univoci ("titolo (2).mp4").
+  - `progress.ts`: progresso complessivo pesato sui byte di video e audio, fasi (download, unione, conversione, incorporamento).
+  - `errors.ts`: 19 categorie di errore leggibili.
+  - `runner.ts`: avvio annullabile; su macOS/Linux termina l'intero gruppo di processi, ffmpeg compreso, su Windows usa `taskkill /T`.
+  - `analyze.ts`: `-J --flat-playlist` + rilevamento di "solo questo video" nelle playlist.
+  - `download.ts`.
+- Le scelte sui contenitori derivano dallo studio del sorgente di yt-dlp (`get_compatible_ext`): **mp4/mkv** accettano qualsiasi codec, quindi solo remux; **mov** preferisce H.264/HEVC + AAC; **webm** preferisce VP9/AV1 + Opus e ricodifica solo come ultima risorsa.
+- Il progresso esce in JSON tramite `--progress-template` e `--print before_dl/after_move`, così non si dipende dal testo in inglese di yt-dlp.
+- **Scivolone 9:** i segmenti HLS di test hanno estensione `.ts` (MPEG Transport Stream) e TypeScript ha provato a compilarli 😅. **Soluzione:** cartella media esclusa dal tsconfig.
+- **Scivolone 10:** in `-J` i valori `None` vengono stampati come `NA`, non come `null`. **Soluzione:** template con `|null` (es. `%(progress.total_bytes|null)s`), così l'output è JSON valido.
+- **Scivolone 11:** non si riesce a sapere se l'URL di una playlist punta anche a un video specifico. Il messaggio "add --no-playlist…" viene soppresso da `-J`, e con `--no-quiet` finisce su stdout e rompe il JSON. **Soluzione:** quando l'analisi restituisce una playlist, si lancia una seconda analisi veloce con `--no-playlist --flat-playlist`.
+- **Scivolone 12 (bug trovato dai test):** la fase "Unione" non compariva mai. I test di integrazione hanno mostrato che yt-dlp stampa il progresso del post-processing su **stderr**. **Soluzione:** anche stderr passa dal parser.
+- **Scivolone 13 (aperto, solo ambiente):** dal container YouTube risponde 403 al download, anche con la CLI di yt-dlp pura, perché gli IP dei datacenter richiedono un *PO token*. Dopo qualche richiesta anche l'analisi riceve "Sign in to confirm you're not a bot". Da `-v` risulta che Deno viene usato correttamente per la sfida JS. Su una connessione domestica non dovrebbe succedere. Se capita, l'errore è classificato `login_required` e l'app propone l'accesso tramite il browser interno. Il test del download da YouTube è attivabile con `GRABBIT_YT_DOWNLOAD=1` e **va verificato dall'utente**.
+- *Test:* 32 nuovi test unitari (argomenti, progresso, 14 casi di errore, nomi file, parsing) ✅. 13 test di integrazione con yt-dlp vero su fixture locali ✅:
+  - scelta della variante HLS migliore (720p su 240p) → mp4;
+  - DASH video + audio → mp4/mkv/mov senza ricodifica (H.264 + AAC verificati con ffprobe);
+  - mp4 H.264 → WebM VP9 + Opus vero;
+  - audio mp3/m4a/opus/flac/wav/ogg con codec corretti e metadati;
+  - annullamento a metà download (< 15 s, nessun file residuo);
+  - errore 404.

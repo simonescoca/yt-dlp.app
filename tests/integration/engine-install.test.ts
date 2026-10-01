@@ -1,12 +1,11 @@
 import { execFileSync } from 'node:child_process'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ComponentManager } from '../../src/main/engine/components'
 import { createNodeHttp } from '../../src/main/engine/http'
 import { detectTarget } from '../../src/main/engine/sources'
+import { DEV_BIN_DIR } from './env'
 
-/** Real downloads from GitHub / dl.deno.land. Shared with the other integration tests. */
-export const DEV_BIN_DIR = resolve(__dirname, '../../.dev-data/bin')
 
 describe('real engine install (network)', () => {
   it('installs yt-dlp nightly, Deno and ffmpeg for this platform', async () => {
