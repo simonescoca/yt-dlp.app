@@ -95,7 +95,7 @@ non supportati.
 
 ### Fase 5 — Distribuzione
 - [x] **T15** Packaging con electron-builder: `.dmg` arm64 (firma ad-hoc), `.exe` NSIS x64, icona
-- [~] **T16** GitHub Actions: CI (typecheck, lint, unit test) + build delle release su tag
+- [x] **T16** GitHub Actions: CI (typecheck, lint, unit test) + build delle release su tag
 - [x] **T17** README: installazione, primo avvio su macOS/Windows senza firma, uso, sviluppo
 
 ### Fase 6 — Conclusione
@@ -299,7 +299,7 @@ non supportati.
 | R5 | Formato video a scelta (mp4) | ✅ | mp4/mkv/mov/webm verificati con ffprobe |
 | R6 | Cartella a scelta (Download) | ✅ | default `app.getPath('downloads')`, selettore nativo |
 | R7 | Solo audio (mp3), formato e cartella | ✅ | mp3/m4a/opus/flac/wav/ogg verificati con ffprobe |
-| R8 | Windows + macOS Apple Silicon | 🟡 | configurazione e CI pronte; pacchetto Linux testato; **mancano build ed esecuzione su Mac e Windows veri** (CI bloccata dal push) |
+| R8 | Windows + macOS Apple Silicon | ✅ | **CI verde su macOS (runner Apple Silicon) e Windows**: installazione reale del motore, yt-dlp, sniffer in Electron e 17 test E2E sull'app vera (run #4) |
 | R9 | SPA bella, minimal, intuitiva | ✅ | 18 test E2E sull'interfaccia + screenshot in `docs/screenshots/` |
 
 **Numeri:** 10 commit · circa 6.300 righe di codice dell'app + circa 2.000 righe di test · **77** test unitari · **14** di integrazione (yt-dlp e motore veri) · **12** dello sniffer dentro Electron · **18** E2E sull'app vera (anche pacchettizzata).
@@ -333,3 +333,10 @@ non supportati.
 - **Scivolone 30 (test, emerso su Windows):** il percorso `/slow/` del server di test non rallentava nulla (il file arrivava a 105 MB/s), quindi il test di annullamento finiva prima di poter annullare. Usavo `pipe()` insieme a `pause()`/`resume()` manuali, ma `pipe` riprende lo stream da solo. Su Linux funzionava per caso. **Soluzione:** un ciclo esplicito leggi → scrivi → attendi 100 ms. Il duplicato in `ytdlp.test.ts` è stato rimosso.
 - Precauzione: `hookTimeout` di 5 minuti per i test di integrazione, perché la generazione delle fixture in `beforeAll` può superare i 10 s di default su macchine lente.
 - *Test locali dopo le correzioni:* 78 unitari, 13 integrazione, 11 sniffer in Electron, 17 E2E ✅.
+
+### 2026-10-01 — Terza CI: tutto verde su Linux, macOS e Windows ✅🎉
+- **Run #4 (commit `c85ac73`) superata su tutte e tre le piattaforme**, con tutti i passaggi eseguiti: typecheck, test unitari, installazione **reale** del motore (yt-dlp nightly, Deno, ffmpeg), test di integrazione di yt-dlp, sniffer dentro Electron e **17 test E2E sull'app vera** (1 saltato: il primo avvio online, che richiede `GRABBIT_NET_TESTS`; l'installazione reale è già coperta dal passaggio dedicato).
+- Durate: Linux 4 min, macOS 4 min, Windows 5,5 min.
+- Il requisito **R8 (Windows + macOS Apple Silicon) è verificato** su macchine reali; la tabella in T18 è aggiornata.
+- **Bilancio della CI:** 3 esecuzioni per arrivare al verde, che hanno trovato **2 bug veri dell'app che avrebbero impedito il primo avvio**: checksum di Deno su Windows e HEAD respinta dal server di ffmpeg per macOS. Senza queste esecuzioni sarebbero arrivati direttamente all'utente. Più 4 problemi dei test o dell'ambiente di CI.
+- **Prossimo passo, per l'utente:** per ottenere gli installer basta un tag (`git tag v0.1.0 && git push --tags`): il workflow *Release* costruisce `.dmg` ed `.exe` e li pubblica in una GitHub Release.
