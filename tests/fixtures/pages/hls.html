@@ -1,0 +1,9 @@
+<!doctype html><html><head><title>Diretta HLS (hls.js)</title><script src="/hls.min.js"></script></head>
+<body><video id="v" width="640" height="360" muted autoplay playsinline></video>
+<script>
+  const v = document.getElementById('v')
+  const hls = new Hls()
+  hls.loadSource('/hls/master.m3u8')
+  hls.attachMedia(v)
+  hls.on(Hls.Events.MANIFEST_PARSED, () => v.play().catch(() => {}))
+</script></body></html>

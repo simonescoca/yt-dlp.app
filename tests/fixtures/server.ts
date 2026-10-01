@@ -48,7 +48,9 @@ export async function startFixtureServer(roots: string[], handler?: Handler, hos
       path = path.slice('/protected'.length)
     }
     if (path.endsWith('/')) path += 'index.html'
-    const file = roots.map((r) => join(r, normalize(path))).find((f) => f.startsWith(resolve(roots[0]!, '..')) && existsSync(f) && statSync(f).isFile())
+    const file = roots
+      .map((r) => [resolve(r), join(resolve(r), normalize(path))] as const)
+      .find(([root, f]) => f.startsWith(root) && existsSync(f) && statSync(f).isFile())?.[1]
     if (!file) {
       res.writeHead(404).end('not found')
       return

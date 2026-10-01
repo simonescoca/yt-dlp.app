@@ -1,0 +1,6 @@
+<!doctype html><html><head><title>Film protetto da DRM</title></head>
+<body><div class="player"></div>
+<script>
+  fetch('/drm/manifest.mpd').then((r) => r.text())
+  fetch('/drm/license', { method: 'POST', body: new Uint8Array([1, 2, 3]) }).catch(() => {})
+</script></body></html>

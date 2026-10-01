@@ -74,7 +74,7 @@ non supportati.
   - *Test:* unit (parsing versioni/checksum, URL per piattaforma) + installazione reale dei componenti Linux nel container
 - [x] **T3** Wrapper yt-dlp: costruzione argomenti (video/audio, contenitori, compatibilità, metadati), analisi `-J`, parser di progresso, esecuzione annullabile, classificazione errori
   - *Test:* unit sul builder e sul parser + download reali (fixture locali mp4/HLS/DASH generate con ffmpeg, siti reali se raggiungibili)
-- [ ] **T4** Sniffer di rete: finestra Chromium nascosta, cattura `webRequest` su tutti i frame, ispezione DOM, autoplay silenzioso, classificazione (m3u8/mpd/mp4/webm…), parsing di master m3u8/mpd, esclusione segmenti e pubblicità, ranking e rilevamento ambiguità, rilevamento DRM
+- [x] **T4** Sniffer di rete: finestra Chromium nascosta, cattura `webRequest` su tutti i frame, ispezione DOM, autoplay silenzioso, classificazione (m3u8/mpd/mp4/webm…), parsing di master m3u8/mpd, esclusione segmenti e pubblicità, ranking e rilevamento ambiguità, rilevamento DRM
   - *Test:* unit su classificazione/ranking/parsing + pagine fixture locali (mp4 diretto, HLS via hls.js, DASH, iframe cross-origin, pubblicità finta, player che si avvia solo al click)
 - [ ] **T5** Orchestrazione: job, coda con concorrenza, pipeline analisi → playlist → sniff → download, nomi file duplicati, annullamento, persistenza della cronologia
   - *Test:* unit sulla coda + integrazione end-to-end senza UI
@@ -158,3 +158,33 @@ non supportati.
   - audio mp3/m4a/opus/flac/wav/ogg con codec corretti e metadati;
   - annullamento a metà download (< 15 s, nessun file residuo);
   - errore 404.
+
+### 2026-10-01 — T4 · Sniffer di rete ("tab Network") ✅
+- Moduli in `src/main/sniffer/`:
+  - `classify.ts`: riconosce HLS, DASH, ISM, file progressivi e audio da MIME, estensione e tipo di risorsa; scarta segmenti, redirect ed errori; euristiche per pubblicità e licenze DRM.
+  - `manifest.ts`: lettura di m3u8 master/media (varianti, durata, live, DRM SAMPLE-AES/FairPlay/Widevine) e di MPD (durata ISO-8601, risoluzione massima, ContentProtection).
+  - `rank.ts`: punteggio e rilevamento dell'ambiguità. Due video "principali" sono ambigui se hanno durate diverse; con la stessa durata sono varianti dello stesso video.
+  - `sniffer.ts`, il motore:
+    - cattura delle richieste con `session.webRequest`, che copre **tutti i frame, anche gli iframe cross-origin**, smistate per `webContentsId`; i redirect vengono seguiti;
+    - lettura del DOM in ogni frame (`<video>`/`<source>`, og:title, og:image);
+    - escalation per avviare il player: `play()` muto → clic sui pulsanti "play" più comuni → clic **trusted** (`sendInputEvent`) al centro del player più grande;
+    - blocco di popup e di navigazioni pubblicitarie;
+    - arresto quando la rete si stabilizza (3 s senza novità) o alla scadenza del timeout; annullabile.
+  - Modalità interattiva (finestra visibile, lista dal vivo) pronta per l'interfaccia.
+  - `probe.ts`: durata e risoluzione dei file progressivi tramite ffprobe.
+- `src/main/browser/cookies.ts`: esportazione dei cookie della sessione in formato Netscape per yt-dlp (anticipata da T7).
+- **Decisione:** la finestra di scansione usa il **rendering offscreen** invece di una finestra nascosta. Molti player non partono se `document.visibilityState` è `hidden`; con l'offscreen la pagina risulta "visibile" senza comparire sullo schermo. Una fixture lo verifica: un player che parte solo se la pagina è visibile.
+- **Scoperta:** al sniffer basta Chromium per catturare il manifest anche quando il player usa MSE (`src="blob:…"`): il blob non passa in rete, ma il .m3u8/.mpd sì.
+- **Ottimizzazione:** con DRM rilevato la scansione si ferma subito invece di provare tutti i clic (da 11,5 s a 3 s).
+- *Test:* 15 nuovi test unitari (classificazione, HLS, DASH, ranking, cookies.txt) ✅. 11 test E2E dentro Electron (harness con esbuild, `npm run test:electron`) su 9 pagine fixture ✅:
+  - mp4 con pubblicità e player che aspetta la visibilità;
+  - hls.js/MSE, con varianti nascoste sotto il master;
+  - DASH via fetch, senza segmenti in lista;
+  - iframe cross-origin, con il Referer corretto;
+  - player che parte solo con un clic trusted;
+  - due video lunghi → ambiguo;
+  - DRM → rilevato e mai scelto;
+  - pagina vuota;
+  - annullamento in < 2 s;
+  - flusso protetto da cookie + Referer, trovato **e scaricato da yt-dlp** con i cookie esportati e uno User-Agent Chrome pulito.
+- *Test reale:* sulla pagina demo di hls.js (rete) è stato trovato il master m3u8 di Big Buck Bunny, 1080p e 634 s, con le varianti nascoste ✅.

@@ -9,10 +9,12 @@ export const MEDIA_DIR = resolve(__dirname, 'media')
  * qualities (master playlist), a DASH stream and a short "ad" clip.
  */
 export function ensureMedia(ffmpeg = 'ffmpeg'): string {
-  const marker = join(MEDIA_DIR, '.ready-v2')
+  const marker = join(MEDIA_DIR, '.ready-v3')
   if (existsSync(marker)) return MEDIA_DIR
   mkdirSync(join(MEDIA_DIR, 'hls'), { recursive: true })
   mkdirSync(join(MEDIA_DIR, 'dash'), { recursive: true })
+  mkdirSync(join(MEDIA_DIR, 'ads'), { recursive: true })
+  mkdirSync(join(MEDIA_DIR, 'drm'), { recursive: true })
   const run = (args: string[]) => execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', ...args])
   const src = (seconds: number, size: string, freq = 440) => [
     '-f', 'lavfi', '-i', `testsrc2=size=${size}:rate=25:duration=${seconds}`,
@@ -23,6 +25,10 @@ export function ensureMedia(ffmpeg = 'ffmpeg'): string {
   // Progressive MP4 (main video) and a 3 s "ad".
   run([...src(8, '1280x720'), ...h264, '-movflags', '+faststart', join(MEDIA_DIR, 'video.mp4')])
   run([...src(3, '640x360', 880), ...h264, '-movflags', '+faststart', join(MEDIA_DIR, 'ad.mp4')])
+  run([...src(3, '640x360', 880), ...h264, '-movflags', '+faststart', join(MEDIA_DIR, 'ads', 'preroll.mp4')])
+  // Two long, low-resolution videos (the scanner treats < 30 s clips as previews/ads).
+  run([...src(45, '640x360', 330), ...h264, '-b:v', '150k', '-movflags', '+faststart', join(MEDIA_DIR, 'long.mp4')])
+  run([...src(70, '640x360', 550), ...h264, '-b:v', '150k', '-movflags', '+faststart', join(MEDIA_DIR, 'long2.mp4')])
 
   // HLS: two variants + master playlist.
   for (const [name, size, bw] of [['low', '426x240', '400000'], ['high', '1280x720', '2500000']] as const) {
@@ -42,6 +48,17 @@ export function ensureMedia(ffmpeg = 'ffmpeg'): string {
   // DASH: one video + one audio representation.
   run([...src(8, '854x480'), '-map', '0:v', '-map', '1:a', ...h264, '-f', 'dash', '-seg_duration', '2',
     '-use_template', '1', '-use_timeline', '0', join(MEDIA_DIR, 'dash', 'manifest.mpd')])
+
+  // A DASH manifest protected by Widevine (never playable, only detected).
+  writeFileSync(join(MEDIA_DIR, 'drm', 'manifest.mpd'), `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT1H30M0S" minBufferTime="PT2S" profiles="urn:mpeg:dash:profile:isoff-live:2011">
+  <Period><AdaptationSet mimeType="video/mp4">
+    <ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc"/>
+    <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"/>
+    <Representation id="v" bandwidth="5000000" width="1920" height="1080" codecs="avc1.640028"/>
+  </AdaptationSet></Period>
+</MPD>
+`)
 
   writeFileSync(marker, new Date().toISOString())
   return MEDIA_DIR

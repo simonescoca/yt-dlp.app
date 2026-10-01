@@ -100,3 +100,44 @@ export interface PlaylistSummary {
   /** Set when the URL also points to one specific video (e.g. YouTube watch?v=…&list=…). */
   singleVideo: MediaSummary | null
 }
+
+// ---------------------------------------------------------------------------
+// Page scanner ("Network tab" sniffer)
+// ---------------------------------------------------------------------------
+
+export type StreamKind = 'hls' | 'dash' | 'ism' | 'progressive' | 'audio'
+
+export interface StreamCandidate {
+  id: string
+  url: string
+  kind: StreamKind
+  mime: string | null
+  /** Bytes (progressive files). */
+  size: number | null
+  width: number | null
+  height: number | null
+  /** Seconds. */
+  duration: number | null
+  live: boolean
+  drm: boolean
+  ad: boolean
+  /** Page / frame that requested it (sent as Referer). */
+  referer: string
+  /** Headers to replay when downloading (User-Agent, Origin...). */
+  headers: Record<string, string>
+  /** Ranking score (higher is better). */
+  score: number
+}
+
+export interface SniffResult {
+  pageUrl: string
+  pageTitle: string
+  thumbnail: string | null
+  candidates: StreamCandidate[]
+  /** Best candidate (null when nothing downloadable was found). */
+  best: StreamCandidate | null
+  /** True when several distinct plausible videos were found: the user should choose. */
+  ambiguous: boolean
+  /** DRM-protected playback was detected (license requests or protected manifests). */
+  drmDetected: boolean
+}

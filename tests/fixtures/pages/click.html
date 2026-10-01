@@ -1,0 +1,16 @@
+<!doctype html><html><head><title>Video che parte al click</title></head>
+<body style="margin:0">
+<div class="player" id="player" style="position:absolute;left:100px;top:100px;width:800px;height:450px;background:#111;color:#fff">
+  Clicca per riprodurre
+</div>
+<script>
+  // Only a real (trusted) click starts the video.
+  document.getElementById('player').addEventListener('click', (e) => {
+    if (!e.isTrusted) return
+    const v = document.createElement('video')
+    v.muted = true
+    v.src = '/long.mp4?clicked=1'
+    document.getElementById('player').appendChild(v)
+    v.play().catch(() => {})
+  })
+</script></body></html>

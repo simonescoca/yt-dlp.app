@@ -1,0 +1,6 @@
+<!doctype html><html><head><title>Video DASH</title></head>
+<body><div class="player" style="width:640px;height:360px;background:#000"></div>
+<script>
+  // A custom player: downloads the manifest and the first segments with fetch().
+  fetch('/dash/manifest.mpd').then((r) => r.text()).then(() => fetch('/dash/init-stream0.m4s'))
+</script></body></html>

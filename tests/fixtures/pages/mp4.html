@@ -1,0 +1,17 @@
+<!doctype html><html><head><title>Pagina con video mp4</title>
+<meta property="og:title" content="Il mio video di prova">
+<meta property="og:image" content="/poster.jpg"></head>
+<body>
+<!-- The player refuses to start while the page is hidden (like many real players). -->
+<video id="main" width="640" height="360" muted playsinline></video>
+<video id="ad" width="160" height="90" src="/ads/preroll.mp4" autoplay muted loop playsinline></video>
+<script>
+  function start() {
+    if (document.visibilityState !== 'visible') return
+    const v = document.getElementById('main')
+    if (!v.src) { v.src = '/video.mp4'; v.play().catch(() => {}) }
+  }
+  document.addEventListener('visibilitychange', start)
+  start()
+</script>
+</body></html>
