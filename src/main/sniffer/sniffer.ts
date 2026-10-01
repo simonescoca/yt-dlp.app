@@ -246,7 +246,14 @@ export async function sniffPage(opts: SniffOptions): Promise<SniffResult> {
     }
   })
   const wc = win.webContents
-  wc.setAudioMuted(true)
+  if (opts.visible) {
+    // Tell the user what to do, in the window title (the page itself is not ours).
+    wc.on('page-title-updated', (e, title) => {
+      e.preventDefault()
+      win.setTitle(`▶ Avvia il video, poi chiudi questa finestra — ${title}`)
+    })
+  }
+  wc.setAudioMuted(!opts.visible)
   wc.setUserAgent(opts.userAgent)
   if (!opts.visible) wc.setFrameRate(10)
 

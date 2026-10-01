@@ -42,6 +42,7 @@ function Thumb({ job }: { job: Job }): React.JSX.Element {
 export function JobCard({ job, onChoose }: Props): React.JSX.Element {
   const { t, locale } = useI18n()
   const [showRaw, setShowRaw] = useState(false)
+  const [interactive, setInteractive] = useState(false)
   const active = ACTIVE.has(job.status)
   const fmt = job.options.mode === 'video' ? job.options.videoFormat : job.options.audioFormat
   const title = job.title ?? hostOf(job.url)
@@ -162,6 +163,7 @@ export function JobCard({ job, onChoose }: Props): React.JSX.Element {
           {status}
         </div>
         {bar}
+        {interactive && job.status === 'scanning' && <div className="job-error-hint">{t('interactive.hint')}</div>}
         {err?.hint && <div className="job-error-hint">{t(err.hint)}</div>}
         {(job.status === 'waiting' || (err && err.actions.some((a) => a !== 'retry')) || (job.status === 'failed' && job.error)) && (
           <div className="job-inline-actions">
@@ -171,7 +173,13 @@ export function JobCard({ job, onChoose }: Props): React.JSX.Element {
               </button>
             )}
             {err?.actions.includes('openPage') && (
-              <button className="btn btn-sm" onClick={() => void api().scanInteractively(job.id)}>
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  setInteractive(true)
+                  void api().scanInteractively(job.id)
+                }}
+              >
                 <ScanSearch size={14} />
                 {t('action.openPage')}
               </button>

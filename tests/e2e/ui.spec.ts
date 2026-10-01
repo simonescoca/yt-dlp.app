@@ -6,7 +6,7 @@ import { ensureMedia, MEDIA_DIR } from '../fixtures/media'
 import { startFixtureServer, type FixtureServer } from '../fixtures/server'
 import { launchApp, ROOT } from './helpers'
 
-const SHOTS = join(ROOT, 'test-results', 'screens')
+const SHOTS = join(ROOT, 'docs', 'screenshots')
 let server: FixtureServer
 let app: ElectronApplication
 let page: Page

@@ -9,7 +9,10 @@ export function webSession(): Session {
 
 /** "accounts.google.com" → "google.com", "www.bbc.co.uk" → "bbc.co.uk" (good enough for display). */
 export function siteOf(hostname: string): string {
-  const parts = hostname.replace(/^\.+/, '').toLowerCase().split('.')
+  const host = hostname.replace(/^\.+/, '').toLowerCase()
+  // IP addresses and single-label hosts (localhost) are shown as they are.
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':') || !host.includes('.')) return host
+  const parts = host.split('.')
   if (parts.length <= 2) return parts.join('.')
   const secondLevel = parts.at(-2)!
   const twoPartTld = secondLevel.length <= 3 && parts.at(-1)!.length === 2 && ['co', 'com', 'org', 'net', 'gov', 'ac', 'edu'].includes(secondLevel)

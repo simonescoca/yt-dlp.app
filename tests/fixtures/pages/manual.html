@@ -1,0 +1,16 @@
+<!doctype html><html><head><title>Video da avviare a mano</title></head>
+<body style="font-family:sans-serif">
+<p>Un sito un po' strano: il video parte solo cliccando il link qui sotto.</p>
+<p style="position:absolute;left:12px;bottom:12px;margin:0"><a href="#" id="go" style="font-size:12px">guarda ora</a></p>
+<div id="box"></div>
+<script>
+  document.getElementById('go').addEventListener('click', (e) => {
+    e.preventDefault()
+    if (!e.isTrusted) return
+    const v = document.createElement('video')
+    v.muted = true
+    v.src = '/long2.mp4?manual=1'
+    document.getElementById('box').appendChild(v)
+    v.play().catch(() => {})
+  })
+</script></body></html>

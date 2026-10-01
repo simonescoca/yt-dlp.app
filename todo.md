@@ -90,8 +90,8 @@ non supportati.
 - [x] **T12** Dialoghi e pannelli: playlist, scelta del flusso, errori, impostazioni, gestione componenti, onboarding del primo avvio
 
 ### Fase 4 — Qualità
-- [ ] **T13** Test E2E con Playwright su Electron (flussi completi con le fixture locali) + screenshot dell'interfaccia
-- [ ] **T14** Casi limite: offline, URL non valido, DRM, annullamento durante l'unione, file esistenti, cartella non scrivibile, errori di aggiornamento
+- [x] **T13** Test E2E con Playwright su Electron (flussi completi con le fixture locali) + screenshot dell'interfaccia
+- [x] **T14** Casi limite: offline, URL non valido, DRM, annullamento durante l'unione, file esistenti, cartella non scrivibile, errori di aggiornamento
 
 ### Fase 5 — Distribuzione
 - [ ] **T15** Packaging con electron-builder: `.dmg` arm64 (firma ad-hoc), `.exe` NSIS x64, icona
@@ -243,3 +243,17 @@ non supportati.
   - impostazioni (tema scuro, inglese, versioni del motore);
   - svuota completati.
   Gli screenshot sono in `test-results/screens/`.
+
+### 2026-10-01 — T13 · T14 · Test end-to-end e casi limite ✅
+- Nuova suite `tests/e2e/edge.spec.ts`:
+  - **primo avvio senza internet** (proxy che rifiuta ogni connessione) → banner "Non riesco a preparare il motore" con "Riprova"; un download spiega "Il motore di download non è pronto";
+  - **cartella non scrivibile** → "Non posso scrivere nella cartella scelta";
+  - **"Apri la pagina"** su un sito dove il video parte solo cliccando un piccolo link in un angolo (l'automatismo non ci riesce, per scelta del test) → l'utente clicca nella finestra, la chiude → la lista dei flussi si apre → download completato;
+  - **finestra di accesso** → il sito compare nella lista e il cookie è nel profilo; "Esci da tutti i siti" lo cancella;
+  - **primo avvio online** → il banner mostra l'avanzamento e il motore vero (yt-dlp nightly + Deno + ffmpeg) viene scaricato **tramite la rete di Electron** in 14,5 s.
+- Nella modalità interattiva, il titolo della finestra dice cosa fare ("▶ Avvia il video, poi chiudi questa finestra") e la card mostra lo stesso suggerimento.
+- **Scivolone 19 (bug trovato prima dei test):** `siteOf("127.0.0.1")` restituiva "0.1" (un IP trattato come dominio). **Soluzione:** IP e host senza punti vengono mostrati così come sono, + test unitario.
+- **Scivolone 20 (ambiente):** il test "cartella non scrivibile" usava `/proc/...`, dove `mkdir -p` di Node **si blocca per sempre** (stranezza del filesystem virtuale). Inoltre come root i permessi non si possono simulare. **Soluzione:** si usa un percorso "dentro" un file (ENOTDIR), che fallisce anche per root.
+- **Scivolone 21 (mio):** un `pkill -f <pattern>` ha ucciso anche la shell che lo eseguiva, perché la riga di comando conteneva lo stesso pattern, e la modifica successiva non è stata applicata. Me ne sono accorto con un `grep` di controllo e ho rieseguito.
+- **Scivolone 22:** Playwright svuota `test-results/` a ogni esecuzione, quindi gli screenshot sparivano. **Soluzione:** salvati in `docs/screenshots/`, così si possono usare anche nel README.
+- *Totale test a questo punto:* 77 unitari ✅ · 14 integrazione yt-dlp/motore ✅ · 12 sniffer dentro Electron ✅ · 18 E2E sull'app vera ✅.

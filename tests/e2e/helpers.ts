@@ -12,6 +12,8 @@ export interface LaunchOptions {
   /** Copy the engine installed by the integration tests (skips the first-run download). */
   seedEngine?: boolean
   env?: Record<string, string>
+  /** Extra Chromium/Electron switches (e.g. --proxy-server to simulate being offline). */
+  args?: string[]
 }
 
 /** Launches the built app (run `npm run build` first) with an isolated profile. */
@@ -23,6 +25,7 @@ export async function launchApp(opts: LaunchOptions = {}): Promise<{ app: Electr
   const args = [join(ROOT, 'out/main/index.js')]
   // Containers run as root, where Chromium refuses to start without this flag.
   if (process.getuid?.() === 0) args.push('--no-sandbox')
+  args.push(...(opts.args ?? []))
   const app = await electron.launch({
     args,
     env: { ...process.env, GRABBIT_USER_DATA: userData, ...opts.env } as Record<string, string>

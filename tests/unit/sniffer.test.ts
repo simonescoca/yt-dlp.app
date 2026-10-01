@@ -173,3 +173,19 @@ describe('cookies.txt export', () => {
     expect(txt).not.toContain('bad')
   })
 })
+
+describe('siteOf (sites list of the login window)', async () => {
+  // web.ts imports electron only for types and BrowserWindow at call time.
+  const { siteOf } = await import('../../src/main/browser/web')
+  it('groups sub-domains under the site', () => {
+    expect(siteOf('accounts.google.com')).toBe('google.com')
+    expect(siteOf('www.bbc.co.uk')).toBe('bbc.co.uk')
+    expect(siteOf('.youtube.com')).toBe('youtube.com')
+    expect(siteOf('vimeo.com')).toBe('vimeo.com')
+  })
+  it('keeps IP addresses and localhost as they are', () => {
+    expect(siteOf('127.0.0.1')).toBe('127.0.0.1')
+    expect(siteOf('localhost')).toBe('localhost')
+    expect(siteOf('[::1]')).toBe('[::1]')
+  })
+})
