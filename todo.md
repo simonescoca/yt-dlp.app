@@ -316,3 +316,6 @@ non supportati.
 4. 🟡 **Dirette in corso:** manca "ferma e salva"; se si annulla, la registrazione va persa (documentato nel README).
 5. ℹ️ **Nome provvisorio "Grabbit"** e licenza `UNLICENSED`: da decidere con l'utente. Il nome si cambia in `package.json`, `electron-builder.yml` e nei testi.
 6. ℹ️ L'installer `.exe` e il `.dmg` vengono generati dalla CI (workflow *Release*): da Linux non si possono creare senza Wine o un Mac.
+
+### 2026-10-01 — Push su GitHub ✅
+- L'utente ha sistemato i permessi: il branch `claude/video-downloader-app-fbjjup` è stato pubblicato su GitHub con tutti i commit, e la **CI** è partita su Linux, macOS e Windows. Problema aperto n. 1 risolto.
