@@ -134,9 +134,10 @@ export class JobManager extends EventEmitter<{ job: [Job]; removed: [string]; ch
     return this.jobs.get(id)
   }
 
-  /** Jobs to persist: newest first, at most MAX_HISTORY. */
+  /** Jobs to persist: every unfinished job + the newest MAX_HISTORY finished ones. */
   snapshot(): Job[] {
-    return this.list().slice(0, MAX_HISTORY)
+    let finished = 0
+    return this.list().filter((j) => !FINISHED.has(j.status) || ++finished <= MAX_HISTORY)
   }
 
   setMaxConcurrent(n: number): void {
@@ -270,7 +271,8 @@ export class JobManager extends EventEmitter<{ job: [Job]; removed: [string]; ch
     const ac = new AbortController()
     this.controllers.set(job.id, ac)
     // Each run gets its own folder: a retry may start before the previous run has cleaned up.
-    const runDir = join(this.deps.workDir, `${job.id}-${++this.runCounter}`)
+    // Kept short: Windows paths are limited to 260 characters and yt-dlp adds ".fNNN.ext.part".
+    const runDir = join(this.deps.workDir, `${job.id.slice(0, 8)}${++this.runCounter}`)
     this.patch(job, { status: 'analyzing', error: null, progress: null })
     try {
       await this.execute(job, ac.signal, runDir)
@@ -380,7 +382,7 @@ export class JobManager extends EventEmitter<{ job: [Job]; removed: [string]; ch
     }
     const ext = outputExtension(opts)
     const prefix = job.playlistIndex != null ? `${String(job.playlistIndex).padStart(2, '0')} - ` : ''
-    const base = uniqueFileName(sanitizeFileName(prefix + (job.title ?? 'video')), ext, (name) => {
+    const base = uniqueFileName(sanitizeFileName(prefix + (job.title ?? 'video'), 120), ext, (name) => {
       const full = join(dir, name)
       return this.reservedNames.has(full) || this.deps.fileExists(full)
     })
@@ -401,7 +403,7 @@ export class JobManager extends EventEmitter<{ job: [Job]; removed: [string]; ch
           options: opts,
           outputDir: dir,
           fileBase: base,
-          tempDir: join(tempDir, useInfo ? 'parts' : 'parts-retry'),
+          tempDir: join(tempDir, useInfo ? 'p' : 'r'),
           headers: stream?.headers
         },
         ctx,

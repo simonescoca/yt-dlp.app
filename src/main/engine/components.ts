@@ -375,7 +375,7 @@ export class ComponentManager extends EventEmitter<{ change: [ComponentState[]] 
     } catch (err) {
       // Apple Silicon kills binaries without a valid signature: sign ad-hoc and retry once.
       if (process.platform !== 'darwin') throw err
-      await execFileAsync('codesign', ['--force', '--deep', '--sign', '-', exe]).catch(() => undefined)
+      await adhocSignTree(join(this.opts.binDir, id, inst.folder))
       ;({ stdout } = await run())
     }
     const first = stdout.split(/\r?\n/)[0]?.trim() ?? ''
@@ -405,6 +405,21 @@ export class ComponentManager extends EventEmitter<{ change: [ComponentState[]] 
         if (name !== current) await rm(join(this.opts.binDir, id, name), { recursive: true, force: true }).catch(() => undefined)
       }
     }
+  }
+}
+
+/**
+ * Ad-hoc signs every executable / library in `dir` (yt-dlp's one-dir build ships its
+ * Python runtime as separate .dylib/.so files, each of which must carry a signature).
+ */
+async function adhocSignTree(dir: string): Promise<void> {
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true })
+  for (const e of entries) {
+    if (!e.isFile()) continue
+    const file = join(e.parentPath, e.name)
+    const isLib = /\.(dylib|so)$/.test(e.name)
+    const isExec = ((await stat(file)).mode & 0o111) !== 0
+    if (isLib || isExec) await execFileAsync('codesign', ['--force', '--sign', '-', file]).catch(() => undefined)
   }
 }
 

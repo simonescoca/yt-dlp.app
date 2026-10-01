@@ -10,7 +10,7 @@ export interface ComposerHandle {
   setUrl: (url: string) => void
 }
 
-const isUrl = (s: string): boolean => /^https?:\/\/\S+\.\S+/i.test(s.trim()) || /^https?:\/\/localhost|127\.0\.0\.1/i.test(s.trim())
+const isUrl = (s: string): boolean => /^https?:\/\/(\S+\.\S+|localhost(:\d+)?(\/\S*)?|\[[0-9a-f:]+\](:\d+)?(\/\S*)?)$/i.test(s.trim())
 
 export const Composer = forwardRef<ComposerHandle, { settings: Settings }>(function Composer({ settings }, ref) {
   const { t } = useI18n()

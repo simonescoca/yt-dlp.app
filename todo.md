@@ -94,9 +94,9 @@ non supportati.
 - [x] **T14** Casi limite: offline, URL non valido, DRM, annullamento durante l'unione, file esistenti, cartella non scrivibile, errori di aggiornamento
 
 ### Fase 5 — Distribuzione
-- [ ] **T15** Packaging con electron-builder: `.dmg` arm64 (firma ad-hoc), `.exe` NSIS x64, icona
-- [ ] **T16** GitHub Actions: CI (typecheck, lint, unit test) + build delle release su tag
-- [ ] **T17** README: installazione, primo avvio su macOS/Windows senza firma, uso, sviluppo
+- [x] **T15** Packaging con electron-builder: `.dmg` arm64 (firma ad-hoc), `.exe` NSIS x64, icona
+- [~] **T16** GitHub Actions: CI (typecheck, lint, unit test) + build delle release su tag
+- [x] **T17** README: installazione, primo avvio su macOS/Windows senza firma, uso, sviluppo
 
 ### Fase 6 — Conclusione
 - [ ] **T18** Revisione finale rispetto ai requisiti, retrospettiva, problemi aperti
@@ -257,3 +257,31 @@ non supportati.
 - **Scivolone 21 (mio):** un `pkill -f <pattern>` ha ucciso anche la shell che lo eseguiva, perché la riga di comando conteneva lo stesso pattern, e la modifica successiva non è stata applicata. Me ne sono accorto con un `grep` di controllo e ho rieseguito.
 - **Scivolone 22:** Playwright svuota `test-results/` a ogni esecuzione, quindi gli screenshot sparivano. **Soluzione:** salvati in `docs/screenshots/`, così si possono usare anche nel README.
 - *Totale test a questo punto:* 77 unitari ✅ · 14 integrazione yt-dlp/motore ✅ · 12 sniffer dentro Electron ✅ · 18 E2E sull'app vera ✅.
+
+### 2026-10-01 — T15 · Packaging ✅
+- `electron-builder.yml`:
+  - macOS `.dmg` + `.zip` **arm64** con **firma ad-hoc** (`identity: "-"`, `hardenedRuntime: false`), minimo macOS 12;
+  - Windows **NSIS x64** con un clic, installazione per utente (niente permessi di amministratore), collegamenti e avvio a fine installazione;
+  - Linux `dir` solo per sviluppo/CI.
+  Il motore non è incluso nell'installer: viene scaricato al primo avvio, come deciso.
+- Icona disegnata in SVG (freccia di download bianca su sfondo indaco, griglia icone macOS 824/1024) e renderizzata in PNG 1024×1024 **con Electron stesso** (`npm run icon`), così non servono strumenti grafici.
+- Menu: su macOS è minimo (App / Modifica / Finestra), così ⌘C/⌘V/⌘Q funzionano; su Windows, nell'app pacchettizzata, la barra dei menu viene rimossa e niente "Ricarica" o DevTools per errore.
+- **Scoperta:** la documentazione di electron-builder 26 dice esplicitamente che senza certificato **non** c'è un fallback ad-hoc automatico, e un'app arm64 non firmata non si avvia. Da qui `identity: "-"`.
+- **Scivolone 23:** l'installer NSIS non si può creare da Linux senza Wine (`spawn wine ENOENT`), mentre il pacchetto Windows `dir` sì. **Soluzione:** l'installer si costruisce sul runner `windows-latest` di GitHub Actions; ho rimosso l'artefatto parziale.
+- **Revisione del codice (prima di chiudere):**
+  - **macOS:** se il binario di yt-dlp viene bloccato, `codesign --deep` sul solo eseguibile non firma le librerie `.dylib`/`.so` di `_internal`. Ora si firmano una per una.
+  - **Windows:** i percorsi temporanei potevano superare i 260 caratteri, quindi cartelle di lavoro più corte e nomi file fino a 120 byte.
+  - **Sviluppo:** la CSP bloccava lo script inline di React Fast Refresh in `npm run dev`. Ora viene iniettata solo nella build di produzione, tramite un plugin di Vite.
+  - Regex degli URL con la precedenza sbagliata, corretta.
+  - Cronologia: si salvano **tutti** i lavori non finiti più gli ultimi 500 conclusi; prima, con playlist enormi, i lavori in coda oltre i 500 andavano persi al riavvio.
+- *Test:* app pacchettizzata (asar, `app.isPackaged = true`) → **17/17 E2E** ✅. Modalità sviluppo avviata correttamente ✅. Tutte le suite rieseguite dopo la revisione: 77 unitari, 14 integrazione, 11 sniffer in Electron, 17 E2E ✅.
+
+### 2026-10-01 — T16 · GitHub Actions 🟡 (scritte, non ancora eseguite)
+- `ci.yml`: su **Linux, macOS (Apple Silicon) e Windows** esegue typecheck, test unitari, installazione **reale** del motore per quel sistema, test di yt-dlp sulle fixture, test dello sniffer dentro Electron e **tutti i test E2E sull'app vera**. È il modo per verificare davvero le parti specifiche di macOS e Windows (firma ad-hoc, `taskkill`, percorsi `.exe`, ffmpeg di Martin Riedl…). Screenshot e trace vengono caricati come artefatti.
+- `release.yml`: con un tag `v*` crea `.dmg` (macOS arm64) e `.exe` (Windows) e li pubblica in una GitHub Release; con "Run workflow" li lascia solo come artefatti.
+- Test resi portabili: suffisso `.exe` esplicito, ffmpeg delle fixture preso dal motore installato invece che dal PATH, harness E2E che funziona con o senza root/Xvfb.
+- **Scivolone 24:** nel primo abbozzo ho usato il contesto `runner` in `env` a livello di job, dove GitHub Actions non lo rende disponibile. **Soluzione:** uso `matrix.os`.
+- ⚠️ **Aperto:** il **push su GitHub è bloccato (403)** dall'inizio della sessione: l'integrazione GitHub di Claude non ha accesso in scrittura al repository. Quindi la CI non è ancora partita e i percorsi macOS/Windows **non sono ancora verificati su macchine reali**. Appena l'accesso c'è, il push farà partire la CI su tutte e tre le piattaforme.
+
+### 2026-10-01 — T17 · README ✅
+- `README.md` in italiano: cosa fa (con screenshot), installazione su macOS (inclusi clic destro → Apri e `xattr -cr`) e su Windows (SmartScreen → "Esegui comunque"), primo avvio, uso, aggiornamenti di yt-dlp, limiti (DRM, controllo anti-bot di YouTube, dirette), architettura, struttura delle cartelle, sviluppo e release.
