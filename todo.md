@@ -83,11 +83,11 @@ non supportati.
   - *Test:* unit sull'esportazione dei cookie + verifica che i cookie arrivino al server fixture
 
 ### Fase 3 — Interfaccia
-- [ ] **T8** Design system (token, tema chiaro/scuro, tipografia, componenti base) + i18n it/en
+- [x] **T8** Design system (token, tema chiaro/scuro, tipografia, componenti base) + i18n it/en
 - [x] **T9** Bridge IPC tipizzato (preload/contextBridge) tra renderer e main
-- [ ] **T10** Schermata principale: campo URL (incolla), Video/Solo audio, formato, cartella, pulsante Scarica
-- [ ] **T11** Lista download: card con miniatura, stato, progresso/velocità/ETA, annulla, riprova, apri file/cartella, cronologia
-- [ ] **T12** Dialoghi e pannelli: playlist, scelta del flusso, errori, impostazioni, gestione componenti, onboarding del primo avvio
+- [x] **T10** Schermata principale: campo URL (incolla), Video/Solo audio, formato, cartella, pulsante Scarica
+- [x] **T11** Lista download: card con miniatura, stato, progresso/velocità/ETA, annulla, riprova, apri file/cartella, cronologia
+- [x] **T12** Dialoghi e pannelli: playlist, scelta del flusso, errori, impostazioni, gestione componenti, onboarding del primo avvio
 
 ### Fase 4 — Qualità
 - [ ] **T13** Test E2E con Playwright su Electron (flussi completi con le fixture locali) + screenshot dell'interfaccia
@@ -208,3 +208,38 @@ non supportati.
 - **Scoperta:** in Electron 44 `clipboard.readText()` è diventato **asincrono** (restituisce una Promise). Il typecheck l'ha segnalato.
 - *Test:* 12 test unitari sul `JobManager` (download semplice, nomi univoci, concorrenza massima, playlist "solo questo video" / voci scelte in sottocartella, *fallback* sullo sniffer, scelta in caso di ambiguità, DRM/nessun media/login, annullamento, nuova estrazione con URL scadute, motore mancante + riprova, ripristino della cronologia) ✅.
 - *Test E2E nell'app vera (Playwright + Electron):* HLS diretto → `master.mp4`; pagina non supportata → sniffer → `Diretta HLS (hls.js).mp3`, con il titolo preso dalla pagina; impostazioni e cronologia sopravvivono al riavvio ✅.
+
+### 2026-10-01 — T8 · T10 · T11 · T12 · Interfaccia ✅
+- **Design system** (`styles.css`): token di colore definiti con `light-dark()`, così un solo set di variabili copre i due temi; il tema "Sistema / Chiaro / Scuro" forza `color-scheme` tramite `[data-theme]`. Font di sistema (SF su Mac, Segoe UI su Windows) e nessuna risorsa esterna, quindi l'app funziona offline. Rispetta `prefers-reduced-motion`; layout adattivo fino a 600 px.
+- **i18n** (`i18n.ts`): oltre 150 testi in italiano e inglese; la lingua è automatica (italiano se il sistema è in italiano) e si può cambiare. Ogni codice d'errore ha una spiegazione semplice e le azioni possibili (Riprova / Apri la pagina / Accedi al sito) + "Dettagli" con il messaggio originale.
+- **Schermata unica:**
+  - campo URL grande con "Incolla" + incolla con ⌘V/Ctrl+V ovunque nella finestra + trascinamento dei link;
+  - interruttore Video / Solo audio;
+  - menu del formato con una spiegazione per ognuno ("MP4 — Compatibile ovunque"…);
+  - scelta della cartella con il selettore nativo;
+  - pulsante Scarica.
+  Formato, modalità e cartella vengono ricordati.
+- **Lista download:** card con miniatura, durata, formato e fonte ("trovato nella pagina" se viene dallo sniffer). Il progresso mostra % · scaricato/totale · velocità · tempo rimanente, poi le fasi (unione, conversione, copertina). Azioni: apri, mostra nella cartella, riprova, annulla, rimuovi, svuota completati.
+- **Dialoghi:**
+  - playlist: solo questo video / tutta la playlist / scegli quali video (con caselle di selezione);
+  - scelta del flusso quando lo sniffer trova più video (risoluzione, durata, peso, badge "Consigliato" / "probabile pubblicità" / "DRM").
+  Si aprono da soli una volta; dalla card si riaprono con "Scegli".
+- **Pannello impostazioni:** lingua, tema, download simultanei (1–5), massima compatibilità, metadati, copertina, accesso ai siti (YouTube, Vimeo, Instagram, Facebook, X, TikTok o indirizzo libero) con "Esci da tutti", canale di yt-dlp, versioni dei componenti, "Controlla aggiornamenti", info. Al primo avvio un banner mostra la preparazione del motore; in basso c'è la versione di yt-dlp con un indicatore di stato.
+- **Scivolone 15:** il tema scuro non si applicava nei test, perché Playwright forza `prefers-color-scheme: light` sulle finestre Electron. **Soluzione:** i token passano a `light-dark()` + `color-scheme` impostato da `[data-theme]`, così il tema non dipende dall'emulazione. Il codice è anche più pulito, senza blocchi duplicati.
+- **Scivolone 16 (bug UX trovato dai test):** il campo `type="url"` attivava la validazione nativa del browser, che bloccava l'invio con un suo fumetto al posto del nostro messaggio. **Soluzione:** `noValidate`.
+- **Scivolone 17 (bug trovato dai test):** nelle playlist "generiche" (più video nella stessa pagina) tutte le voci avevano la stessa URL, perché il `webpage_url` di ogni voce è la pagina stessa. Il risultato era "Scarica 1 video" con 2 video selezionati. **Soluzione:** si preferisce l'`url` della voce e si scartano i duplicati, + test unitario.
+- **Scivolone 18 (stile):** un pulsante principale disabilitato diventava grigio al passaggio del mouse, perché la regola generica `.btn:hover` lo sovrascriveva. **Soluzione:** `:hover:not(:disabled)`.
+- **Miglioramenti:** se lo sniffer non trova nulla, la card mostra comunque il titolo della pagina invece del solo host. Nelle pagine senza video, la scansione si ferma 3 s dopo l'ultimo tentativo invece di aspettare il timeout (errore in 16 s invece di 27).
+- *Test:* 13 test E2E sull'interfaccia vera (Playwright → Electron) ✅:
+  - stato vuoto in italiano con mp4 di default;
+  - testo non valido rifiutato;
+  - incolla ovunque;
+  - download con barra di avanzamento e completamento;
+  - solo audio in M4A;
+  - playlist con scelta delle voci e sottocartella;
+  - sniffer con scelta del flusso;
+  - pagina senza video con errore chiaro + "Apri la pagina" + "Dettagli";
+  - annullamento;
+  - impostazioni (tema scuro, inglese, versioni del motore);
+  - svuota completati.
+  Gli screenshot sono in `test-results/screens/`.

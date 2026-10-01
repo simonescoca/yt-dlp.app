@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { app, net, type BrowserWindow } from 'electron'
+import { app, nativeTheme, net, type BrowserWindow } from 'electron'
 import type { AppEvent, AppState, DownloadOptions, Job, PlaylistDecision, Settings } from '@shared/types'
 import { exportSessionCookies } from '../browser/cookies'
 import { clearWebData, openLoginWindow, webSession } from '../browser/web'
@@ -55,6 +55,8 @@ export class AppCore {
     const defaults = defaultSettings(app.getPath('downloads'))
     this.settings = sanitizeSettings(await readJson<unknown>(join(this.userData, 'settings.json'), {}), defaults)
     this.loginSites = await readJson<string[]>(join(this.userData, 'logins.json'), [])
+    // Drives prefers-color-scheme in the UI and the native dialogs/scrollbars.
+    nativeTheme.themeSource = this.settings.theme
 
     const workDir = join(this.userData, 'work')
     await rm(workDir, { recursive: true, force: true }).catch(() => undefined)
@@ -181,6 +183,7 @@ export class AppCore {
     this.settings = sanitizeSettings({ ...this.settings, ...patch }, defaultSettings(app.getPath('downloads')))
     this.settingsFile.save(this.settings)
     this.jobs.setMaxConcurrent(this.settings.maxConcurrent)
+    nativeTheme.themeSource = this.settings.theme
     if (this.settings.ytdlpChannel !== prevChannel) void this.components.update('yt-dlp').catch(() => undefined)
     this.emit({ type: 'settings', settings: this.settings })
     return this.settings

@@ -22,6 +22,7 @@
     "scripts/**/*"
   ],
   "exclude": [
-    "tests/fixtures/media/**"
+    "tests/fixtures/media/**",
+    "tests/e2e/**"
   ]
 }

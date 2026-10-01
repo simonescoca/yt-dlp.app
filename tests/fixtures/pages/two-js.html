@@ -1,0 +1,13 @@
+<!doctype html><html><head><title>Due video creati da JavaScript</title></head>
+<body><div id="box"></div>
+<script>
+  // Created at runtime: invisible to yt-dlp's HTML parser, visible to the network scanner.
+  for (const src of ['/long.mp4?a=1', '/long2.mp4?b=2']) {
+    const v = document.createElement('video')
+    v.muted = true
+    v.autoplay = true
+    v.width = 480
+    v.src = src
+    document.getElementById('box').appendChild(v)
+  }
+</script></body></html>

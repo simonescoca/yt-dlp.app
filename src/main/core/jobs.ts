@@ -343,6 +343,8 @@ export class JobManager extends EventEmitter<{ job: [Job]; removed: [string]; ch
     this.patch(job, { status: 'scanning' })
     const result = await this.deps.sniff({ url: job.url, signal })
     if (signal.aborted) return
+    // Even when nothing is found, the page title is a better label than the bare URL.
+    if (!job.title && result.pageTitle && result.pageTitle !== job.url) this.patch(job, { title: result.pageTitle, thumbnail: result.thumbnail })
     if (!result.best) {
       if (result.drmDetected) throw new JobFailure({ code: 'drm', message: 'Il video è protetto da DRM' })
       throw new JobFailure({ code: cause.code === 'forbidden' ? 'forbidden' : 'no_media', message: cause.message })

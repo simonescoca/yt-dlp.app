@@ -59,10 +59,14 @@ export function toMediaSummary(info: InfoDict, inputUrl: string): MediaSummary {
 
 export function toPlaylistEntries(info: InfoDict): PlaylistEntry[] {
   const out: PlaylistEntry[] = []
+  const seen = new Set<string>()
   for (const e of info.entries ?? []) {
     if (!e) continue
-    const url = e.webpage_url ?? e.url
-    if (!url || !/^https?:/.test(url)) continue
+    // Flat entries carry the video page in `url`; full entries of generic pages carry the media
+    // URL there, while their `webpage_url` is the playlist page itself (same for every entry).
+    const url = [e.url, e.webpage_url].find((u) => u && /^https?:/.test(u) && !seen.has(u))
+    if (!url) continue
+    seen.add(url)
     out.push({
       url,
       title: (e.title ?? '').trim() || e.id || url,

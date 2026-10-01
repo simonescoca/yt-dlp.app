@@ -451,7 +451,9 @@ export async function sniffPage(opts: SniffOptions): Promise<SniffResult> {
       await sleep(2500, opts.signal)
     }
     // Wait for the network to settle (no new media for 3 s) or the deadline.
-    while (!closed && !opts.signal?.aborted && Date.now() < deadline) {
+    // With nothing found after every attempt, give late players 3 more seconds and stop.
+    const giveUpAt = Math.min(deadline, Date.now() + 3000)
+    while (!closed && !opts.signal?.aborted && Date.now() < (hits.size ? deadline : giveUpAt)) {
       if (hits.size && Date.now() - lastNewHit > 3000) break
       await sleep(500, opts.signal)
     }

@@ -175,4 +175,14 @@ describe('analysis parsing', () => {
     ])
     expect(pickThumbnail({ thumbnails: [] })).toBeNull()
   })
+  it('keeps distinct URLs for videos found in the same page (generic playlists)', () => {
+    const page = 'http://site/two.html'
+    const entries = toPlaylistEntries({
+      entries: [
+        { id: '1', title: 'Due video (1)', url: 'http://site/long.mp4', webpage_url: page },
+        { id: '2', title: 'Due video (2)', url: 'http://site/long2.mp4', webpage_url: page }
+      ]
+    })
+    expect(entries.map((e) => e.url)).toEqual(['http://site/long.mp4', 'http://site/long2.mp4'])
+  })
 })

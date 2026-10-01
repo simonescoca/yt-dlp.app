@@ -40,6 +40,20 @@ export async function startFixtureServer(roots: string[], handler?: Handler, hos
     if (handler?.(req, res)) return
     const url = new URL(req.url ?? '/', 'http://x')
     let path = decodeURIComponent(url.pathname)
+    // /slow/<file>: served at ~160 KB/s (to watch progress and test cancellation).
+    if (path.startsWith('/slow/')) {
+      const file = roots.map((r) => join(resolve(r), normalize(path.slice(5)))).find((f) => existsSync(f))
+      if (!file) return void res.writeHead(404).end()
+      res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Content-Length': statSync(file).size })
+      const stream = createReadStream(file, { highWaterMark: 16 * 1024 })
+      stream.on('data', () => {
+        stream.pause()
+        setTimeout(() => stream.resume(), 100)
+      })
+      res.on('close', () => stream.destroy())
+      stream.pipe(res)
+      return
+    }
     if (path.startsWith('/protected/')) {
       if (!/(^|;\s*)session=ok/.test(req.headers.cookie ?? '') || !req.headers.referer) {
         res.writeHead(403).end('forbidden')
