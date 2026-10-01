@@ -8,7 +8,8 @@ import type { ComponentId } from '@shared/types'
 export const COMPONENT_IDS: readonly ComponentId[] = ['yt-dlp', 'deno', 'ffmpeg']
 
 export type Target = 'darwin-arm64' | 'darwin-x64' | 'win32-x64' | 'linux-x64'
-export type YtdlpChannel = 'nightly' | 'stable'
+export type { YtdlpChannel } from '@shared/types'
+import type { YtdlpChannel } from '@shared/types'
 
 export function detectTarget(platform: string = process.platform, arch: string = process.arch): Target {
   const t = `${platform}-${arch}`

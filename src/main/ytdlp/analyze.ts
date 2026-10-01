@@ -102,8 +102,8 @@ async function dumpJson(url: string, ctx: EngineContext, extra: string[], signal
  * Asks yt-dlp what is behind `url`. For playlists it also checks whether the
  * URL points to one specific video, so the UI can offer "only this video".
  */
-export async function analyze(url: string, ctx: EngineContext, signal?: AbortSignal): Promise<AnalyzeResult> {
-  const first = await dumpJson(url, ctx, [], signal)
+export async function analyze(url: string, ctx: EngineContext, signal?: AbortSignal, opts: { noPlaylist?: boolean } = {}): Promise<AnalyzeResult> {
+  const first = await dumpJson(url, ctx, opts.noPlaylist ? ['--no-playlist'] : [], signal)
   if (!isPlaylist(first.info)) {
     return { kind: 'video', media: toMediaSummary(first.info, url), infoJson: first.raw }
   }

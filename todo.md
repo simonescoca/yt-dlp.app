@@ -76,15 +76,15 @@ non supportati.
   - *Test:* unit sul builder e sul parser + download reali (fixture locali mp4/HLS/DASH generate con ffmpeg, siti reali se raggiungibili)
 - [x] **T4** Sniffer di rete: finestra Chromium nascosta, cattura `webRequest` su tutti i frame, ispezione DOM, autoplay silenzioso, classificazione (m3u8/mpd/mp4/webm…), parsing di master m3u8/mpd, esclusione segmenti e pubblicità, ranking e rilevamento ambiguità, rilevamento DRM
   - *Test:* unit su classificazione/ranking/parsing + pagine fixture locali (mp4 diretto, HLS via hls.js, DASH, iframe cross-origin, pubblicità finta, player che si avvia solo al click)
-- [ ] **T5** Orchestrazione: job, coda con concorrenza, pipeline analisi → playlist → sniff → download, nomi file duplicati, annullamento, persistenza della cronologia
+- [x] **T5** Orchestrazione: job, coda con concorrenza, pipeline analisi → playlist → sniff → download, nomi file duplicati, annullamento, persistenza della cronologia
   - *Test:* unit sulla coda + integrazione end-to-end senza UI
-- [ ] **T6** Impostazioni persistenti (cartella, formati, concorrenza, lingua, tema, compatibilità, extra) e selettore cartella nativo
-- [ ] **T7** Browser interno di login (partizione persistente condivisa con lo sniffer) ed esportazione dei cookie in formato Netscape per yt-dlp
+- [x] **T6** Impostazioni persistenti (cartella, formati, concorrenza, lingua, tema, compatibilità, extra) e selettore cartella nativo
+- [x] **T7** Browser interno di login (partizione persistente condivisa con lo sniffer) ed esportazione dei cookie in formato Netscape per yt-dlp
   - *Test:* unit sull'esportazione dei cookie + verifica che i cookie arrivino al server fixture
 
 ### Fase 3 — Interfaccia
 - [ ] **T8** Design system (token, tema chiaro/scuro, tipografia, componenti base) + i18n it/en
-- [ ] **T9** Bridge IPC tipizzato (preload/contextBridge) tra renderer e main
+- [x] **T9** Bridge IPC tipizzato (preload/contextBridge) tra renderer e main
 - [ ] **T10** Schermata principale: campo URL (incolla), Video/Solo audio, formato, cartella, pulsante Scarica
 - [ ] **T11** Lista download: card con miniatura, stato, progresso/velocità/ETA, annulla, riprova, apri file/cartella, cronologia
 - [ ] **T12** Dialoghi e pannelli: playlist, scelta del flusso, errori, impostazioni, gestione componenti, onboarding del primo avvio
@@ -188,3 +188,23 @@ non supportati.
   - annullamento in < 2 s;
   - flusso protetto da cookie + Referer, trovato **e scaricato da yt-dlp** con i cookie esportati e uno User-Agent Chrome pulito.
 - *Test reale:* sulla pagina demo di hls.js (rete) è stato trovato il master m3u8 di Big Buck Bunny, 1080p e 634 s, con le varianti nascoste ✅.
+
+### 2026-10-01 — T5 · T6 · T7 · T9 · Core dell'app ✅
+- `src/main/core/jobs.ts` (`JobManager`): coda con concorrenza configurabile (default 2), pipeline analisi → scelta della playlist → *fallback* sullo sniffer → download.
+  - Nomi file mai sovrascritti: "titolo (2).mp4", con prenotazione dei nomi per evitare collisioni tra download paralleli.
+  - Playlist in una sottocartella con numerazione "01 - …".
+  - Se le URL salvate dall'analisi sono scadute, nuovo tentativo con un'estrazione fresca.
+  - Annullamento, nuovo tentativo, cronologia persistente; i lavori interrotti dalla chiusura dell'app vengono segnati come tali.
+  - Tutte le dipendenze sono iniettate, quindi testabile senza Electron.
+- `src/main/core/settings.ts` + `store.ts`:
+  - impostazioni validate campo per campo, così un file corrotto o vecchio non rompe l'app;
+  - scritture JSON atomiche e *debounced*;
+  - preferenze ricordate (ultima modalità/formato/cartella); al primo avvio restano mp4 / mp3 / Download come richiesto.
+- `src/main/core/app-core.ts`: collega motore, coda, sniffer, login e log su file (`logs/main.log` con rotazione a 5 MB). yt-dlp viene aggiornato a ogni avvio, ogni 6 ore e prima di ogni analisi se l'ultimo controllo ha più di un'ora; Deno ogni 24 ore, ffmpeg ogni 7 giorni.
+- `src/main/browser/web.ts` (T7): profilo browser persistente condiviso tra la finestra di login e lo sniffer; i popup OAuth restano nello stesso profilo; lista dei siti visitati per accedere; "Esci da tutti" cancella cookie, storage e cache.
+- `src/main/ipc.ts` + `src/preload/index.ts` (T9): API tipizzata `window.grabbit` (20 metodi + eventi push). Il renderer resta in sandbox, con `contextIsolation` attivo e senza Node.
+- Altro: istanza singola, notifica di sistema a download completato (se la finestra non ha il focus), link esterni aperti nel browser di sistema.
+- **Scivolone 14 (race condition trovata dai test):** con "riprova", o con la scelta della playlist subito dopo l'analisi, la pulizia del run precedente cancellava la cartella temporanea e il controller di quello nuovo. **Soluzione:** una cartella temporanea per ogni run, e il controller viene rimosso solo se appartiene ancora a quel run.
+- **Scoperta:** in Electron 44 `clipboard.readText()` è diventato **asincrono** (restituisce una Promise). Il typecheck l'ha segnalato.
+- *Test:* 12 test unitari sul `JobManager` (download semplice, nomi univoci, concorrenza massima, playlist "solo questo video" / voci scelte in sottocartella, *fallback* sullo sniffer, scelta in caso di ambiguità, DRM/nessun media/login, annullamento, nuova estrazione con URL scadute, motore mancante + riprova, ripristino della cronologia) ✅.
+- *Test E2E nell'app vera (Playwright + Electron):* HLS diretto → `master.mp4`; pagina non supportata → sniffer → `Diretta HLS (hls.js).mp3`, con il titolo preso dalla pagina; impostazioni e cronologia sopravvivono al riavvio ✅.
