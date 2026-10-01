@@ -45,13 +45,15 @@ export async function startFixtureServer(roots: string[], handler?: Handler, hos
       const file = roots.map((r) => join(resolve(r), normalize(path.slice(5)))).find((f) => existsSync(f))
       if (!file) return void res.writeHead(404).end()
       res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Content-Length': statSync(file).size })
-      const stream = createReadStream(file, { highWaterMark: 16 * 1024 })
-      stream.on('data', () => {
-        stream.pause()
-        setTimeout(() => stream.resume(), 100)
-      })
-      res.on('close', () => stream.destroy())
-      stream.pipe(res)
+      // Explicit write loop: pipe() would resume the stream on its own and defeat the throttling.
+      void (async () => {
+        for await (const chunk of createReadStream(file, { highWaterMark: 16 * 1024 })) {
+          if (res.destroyed) return
+          res.write(chunk)
+          await new Promise((r) => setTimeout(r, 100))
+        }
+        res.end()
+      })().catch(() => res.destroy())
       return
     }
     if (path.startsWith('/protected/')) {

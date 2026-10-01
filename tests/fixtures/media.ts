@@ -22,13 +22,13 @@ function defaultFfmpeg(): string {
  * qualities (master playlist), a DASH stream and a short "ad" clip.
  */
 export function ensureMedia(ffmpeg = defaultFfmpeg()): string {
-  const marker = join(MEDIA_DIR, '.ready-v3')
+  const marker = join(MEDIA_DIR, '.ready-v4')
   if (existsSync(marker)) return MEDIA_DIR
   mkdirSync(join(MEDIA_DIR, 'hls'), { recursive: true })
   mkdirSync(join(MEDIA_DIR, 'dash'), { recursive: true })
   mkdirSync(join(MEDIA_DIR, 'ads'), { recursive: true })
   mkdirSync(join(MEDIA_DIR, 'drm'), { recursive: true })
-  const run = (args: string[]) => execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', ...args])
+  const run = (args: string[], cwd?: string) => execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', ...args], { cwd })
   const src = (seconds: number, size: string, freq = 440) => [
     '-f', 'lavfi', '-i', `testsrc2=size=${size}:rate=25:duration=${seconds}`,
     '-f', 'lavfi', '-i', `sine=frequency=${freq}:sample_rate=48000:duration=${seconds}`
@@ -59,8 +59,9 @@ export function ensureMedia(ffmpeg = defaultFfmpeg()): string {
   ].join('\n'))
 
   // DASH: one video + one audio representation.
+  // Relative output inside the folder: on Windows the DASH muxer misplaces segments given a backslash path.
   run([...src(8, '854x480'), '-map', '0:v', '-map', '1:a', ...h264, '-f', 'dash', '-seg_duration', '2',
-    '-use_template', '1', '-use_timeline', '0', join(MEDIA_DIR, 'dash', 'manifest.mpd')])
+    '-use_template', '1', '-use_timeline', '0', 'manifest.mpd'], join(MEDIA_DIR, 'dash'))
 
   // A DASH manifest protected by Widevine (never playable, only detected).
   writeFileSync(join(MEDIA_DIR, 'drm', 'manifest.mpd'), `<?xml version="1.0"?>

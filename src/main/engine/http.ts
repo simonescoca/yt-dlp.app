@@ -83,9 +83,13 @@ export function createNodeHttp(): Http {
     fetch: fetchFn,
     getText: (url, signal) => getTextWith(fetchFn, url, signal),
     async resolveRedirect(url) {
-      const res = await fetch(url, { method: 'HEAD', redirect: 'manual', headers: { 'User-Agent': USER_AGENT } })
+      // GET, not HEAD: some servers (ffmpeg.martin-riedl.de) answer 404 to HEAD. The body is never read.
+      const ac = new AbortController()
+      const res = await fetch(url, { redirect: 'manual', headers: { 'User-Agent': USER_AGENT }, signal: ac.signal })
+      ac.abort()
       const loc = res.headers.get('location')
       if (res.status >= 300 && res.status < 400 && loc) return new URL(loc, url).toString()
+      if (res.status >= 400) throw new HttpError(url, res.status)
       return null
     }
   }
@@ -100,7 +104,8 @@ export function createElectronHttp(net: typeof import('electron').net): Http {
     resolveRedirect(url) {
       // net.fetch rejects manual redirects, so use the lower level request API.
       return new Promise((resolve, reject) => {
-        const req = net.request({ url, method: 'HEAD', redirect: 'manual' })
+        // GET, not HEAD: some servers (ffmpeg.martin-riedl.de) answer 404 to HEAD. Aborted at the redirect.
+        const req = net.request({ url, method: 'GET', redirect: 'manual' })
         req.setHeader('User-Agent', USER_AGENT)
         let settled = false
         const timer = setTimeout(() => {
@@ -120,7 +125,7 @@ export function createElectronHttp(net: typeof import('electron').net): Http {
           if (settled) return
           settled = true
           clearTimeout(timer)
-          res.on('data', () => undefined)
+          req.abort()
           if (res.statusCode >= 400) reject(new HttpError(url, res.statusCode))
           else resolve(null)
         })

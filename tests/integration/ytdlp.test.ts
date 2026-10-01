@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, statSync, createReadStream } from 'node:fs'
+import { mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -39,19 +39,8 @@ async function run(url: string, o: DownloadOptions, fileBase: string, extra: { s
 
 beforeAll(async () => {
   ensureMedia(join(paths.ffmpegDir, exe('ffmpeg')))
-  // Serves the media slowly under /slow/ (to test cancellation mid-download).
-  server = await startFixtureServer([MEDIA_DIR], (req, res) => {
-    if (!req.url?.startsWith('/slow/')) return false
-    const file = join(MEDIA_DIR, req.url.slice('/slow/'.length))
-    res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': statSync(file).size })
-    const stream = createReadStream(file, { highWaterMark: 16 * 1024 })
-    stream.on('data', () => {
-      stream.pause()
-      setTimeout(() => stream.resume(), 100)
-    })
-    stream.pipe(res)
-    return true
-  })
+  // /slow/<file> (built into the fixture server) is throttled, to test cancellation mid-download.
+  server = await startFixtureServer([MEDIA_DIR])
   out = mkdtempSync(join(tmpdir(), 'grabbit-out-'))
 })
 
