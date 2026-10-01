@@ -99,7 +99,7 @@ non supportati.
 - [x] **T17** README: installazione, primo avvio su macOS/Windows senza firma, uso, sviluppo
 
 ### Fase 6 — Conclusione
-- [ ] **T18** Revisione finale rispetto ai requisiti, retrospettiva, problemi aperti
+- [x] **T18** Revisione finale rispetto ai requisiti, retrospettiva, problemi aperti
 
 ---
 
@@ -285,3 +285,34 @@ non supportati.
 
 ### 2026-10-01 — T17 · README ✅
 - `README.md` in italiano: cosa fa (con screenshot), installazione su macOS (inclusi clic destro → Apri e `xattr -cr`) e su Windows (SmartScreen → "Esegui comunque"), primo avvio, uso, aggiornamenti di yt-dlp, limiti (DRM, controllo anti-bot di YouTube, dirette), architettura, struttura delle cartelle, sviluppo e release.
+
+### 2026-10-01 — T18 · Revisione finale e retrospettiva ✅
+
+**Verifica dei requisiti**
+
+| # | Requisito | Stato | Come è stato verificato |
+|---|---|---|---|
+| R1 | Massima qualità | ✅ | test: tra le varianti HLS sceglie 720p invece di 240p; YouTube: test pronto (`GRABBIT_YT_DOWNLOAD=1`) |
+| R2 | YouTube e altri siti | ✅ / 🟡 | analisi YouTube riuscita nel container; il **download** da YouTube va verificato dall'utente (vedi problemi aperti) |
+| R3 | Scansione come la tab Network | ✅ | 11 test in Electron + pagina reale della demo di hls.js |
+| R4 | yt-dlp sempre aggiornato | ✅ | nightly, controllo all'avvio, ogni 6 h e prima di ogni analisi (> 1 h); SHA-256; test sull'aggiornamento |
+| R5 | Formato video a scelta (mp4) | ✅ | mp4/mkv/mov/webm verificati con ffprobe |
+| R6 | Cartella a scelta (Download) | ✅ | default `app.getPath('downloads')`, selettore nativo |
+| R7 | Solo audio (mp3), formato e cartella | ✅ | mp3/m4a/opus/flac/wav/ogg verificati con ffprobe |
+| R8 | Windows + macOS Apple Silicon | 🟡 | configurazione e CI pronte; pacchetto Linux testato; **mancano build ed esecuzione su Mac e Windows veri** (CI bloccata dal push) |
+| R9 | SPA bella, minimal, intuitiva | ✅ | 18 test E2E sull'interfaccia + screenshot in `docs/screenshots/` |
+
+**Numeri:** 10 commit · circa 6.300 righe di codice dell'app + circa 2.000 righe di test · **77** test unitari · **14** di integrazione (yt-dlp e motore veri) · **12** dello sniffer dentro Electron · **18** E2E sull'app vera (anche pacchettizzata).
+
+**Cosa ha funzionato bene**
+- Fixture locali generate con ffmpeg (mp4, HLS a 2 qualità, DASH, pagine con player, iframe, DRM, pubblicità): test veloci, deterministici e indipendenti da internet.
+- Tenere la logica pura (classificazione, ranking, argomenti, progresso, coda) separata da Electron: gran parte del comportamento si testa in millisecondi.
+- I test hanno trovato **7 bug reali** prima dell'utente: scritture del manifest in parallelo, fase "unione" invisibile, *race condition* su "riprova", validazione nativa del campo URL, URL duplicate nelle playlist generiche, `siteOf` sugli IP, stile del pulsante disabilitato.
+
+**Problemi aperti / da verificare**
+1. ⚠️ **Push su GitHub bloccato (403)**: l'integrazione Claude ha accesso in lettura al repository ma non in scrittura. I 10 commit sono pronti in locale sul branch `claude/video-downloader-app-fbjjup`. Finché non vengono spinti, la CI (che verifica macOS e Windows veri) non parte.
+2. 🟡 **Download da YouTube** non verificabile dal container: l'IP del datacenter riceve 403 o "not a bot" anche con yt-dlp puro. Da casa dovrebbe funzionare; se capita, l'app suggerisce di accedere al sito.
+3. 🟡 **Accesso a Google/YouTube dalla finestra integrata:** Google a volte blocca l'accesso dai browser "incorporati" ("questo browser potrebbe non essere sicuro"). Non è verificabile senza un account. Se succede, una soluzione semplice è aggiungere nelle impostazioni avanzate l'importazione dei cookie da Firefox/Safari/Chrome (`--cookies-from-browser`).
+4. 🟡 **Dirette in corso:** manca "ferma e salva"; se si annulla, la registrazione va persa (documentato nel README).
+5. ℹ️ **Nome provvisorio "Grabbit"** e licenza `UNLICENSED`: da decidere con l'utente. Il nome si cambia in `package.json`, `electron-builder.yml` e nei testi.
+6. ℹ️ L'installer `.exe` e il `.dmg` vengono generati dalla CI (workflow *Release*): da Linux non si possono creare senza Wine o un Mac.
